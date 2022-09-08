@@ -1,0 +1,22 @@
+---
+title: "data"
+author: "Austin Kennedy"
+date: '2022-04-16'
+output: html_document
+---
+
+
+```{r Clear memory and setup}
+rm(list=ls())
+options(scipen=999)
+```
+
+
+```{r Load Packages}
+library(tidyverse)
+library(haven)
+```
+
+```{r Load Data}
+df <- read_dta("../input/zzir62dt/ZZIR62FL.DTA")
+```
