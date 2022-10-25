@@ -1,0 +1,111 @@
+---
+title: "figures"
+author: "Austin Kennedy"
+date: '2022-04-16'
+output: html_document
+---
+
+
+```{r Clear memory and setup}
+rm(list=ls())
+options(scipen=999)
+```
+
+
+```{r Load Packages}
+library(tidyverse)
+```
+
+```{r Load Data}
+trades_matched <- read.csv('../temporary/matched_trades.csv')
+trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+```
+
+
+```{r }
+
+agg_outflow <- function(data, country){
+  outflows <- data %>%
+    filter((Currency == toString(country)) & (Currency2 != toString(country)))
+  
+  p <- ggplot(outflows)
+}
+
+```
+
+
+```{r Test Code}
+agg <- trades_matched %>%
+  filter((Currency == "UAH"))  %>%
+  group_by(daily = as.Date(date)) %>%
+  summarise(volume = sum(amount))
+
+ggplot(agg, aes(x=daily, y=volume)) +
+  geom_line() +
+  xlab("") +
+  ylim(0,0.5) +
+  scale_x_date(limit=c(as.Date("2022-01-01"), as.Date("2022-10-01")))
+```
+
+```{r Top Exporting/Importing}
+top_export <- trades_matched %>%
+  filter(Currency != Currency2) %>%
+  group_by(Currency) %>%
+  summarise(total = sum(amount)) %>%
+  arrange(desc(total)) %>%
+  slice(1:10)
+
+exporters <- top_export$Currency
+
+library(lubridate)
+
+agg_exporters <- trades_matched %>%
+  filter((Currency %in% exporters) & (Currency != Currency2)) %>%
+  group_by(Currency, monthly = as.Date(floor_date(date, "month"))) %>%
+  summarise(volume = sum(amount))
+
+ggplot(agg_exporters, aes(x=monthly, y=volume, color = Currency)) +
+  geom_line() +
+  xlab("") +
+  ylim(0,300) +
+  theme_bw() +
+  ggtitle("Top Exporters")
+
+  # scale_x_date(limit=c(as.Date("2017-01-01"), as.Date("2022-01-01")))
+
+ggsave("../output/exporters_full.png")
+
+```
+
+```{r importers}
+top_import <- trades_matched %>%
+  filter(Currency != Currency2) %>%
+  group_by(Currency2) %>%
+  summarise(total = sum(amount)) %>%
+  arrange(desc(total)) %>%
+  slice(1:10)
+
+importers <- top_import$Currency2
+
+library(lubridate)
+
+agg_importers <- trades_matched %>%
+  filter((Currency2 %in% importers) & (Currency != Currency2)) %>%
+  group_by(Currency2, monthly = as.Date(floor_date(date, "month"))) %>%
+  summarise(volume = sum(amount))
+
+ggplot(agg_importers, aes(x=monthly, y=volume, color = Currency2)) +
+  geom_line() +
+  xlab("") +
+  ylim(0,300) +
+  theme_bw() +
+  ggtitle("Top Importers") #+
+  # scale_x_date(limit=c(as.Date("2020-01-01"), as.Date("2022-01-01")))
+
+ggsave("../output/importers_full.png")
+```
+
+
+
+
+
