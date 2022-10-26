@@ -22,7 +22,7 @@ trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:
 ```
 
 
-```{r }
+```{r Functions}
 
 agg_outflow <- function(data, country){
   outflows <- data %>%
@@ -36,15 +36,18 @@ agg_outflow <- function(data, country){
 
 ```{r Test Code}
 agg <- trades_matched %>%
-  filter((Currency == "UAH"))  %>%
+  filter((Currency == "RUB"))  %>%
   group_by(daily = as.Date(date)) %>%
-  summarise(volume = sum(amount))
+  summarise(volume = sum(nominal_amount))
+
+vline <- which(agg$daily %in% as.Date(c("2022-02-24")))
 
 ggplot(agg, aes(x=daily, y=volume)) +
   geom_line() +
+  geom_vline(xintercept = as.numeric(agg$daily[vline]), color='red') +
   xlab("") +
-  ylim(0,0.5) +
-  scale_x_date(limit=c(as.Date("2022-01-01"), as.Date("2022-10-01")))
+  ylim(0,5000000) +
+  scale_x_date(limit=c(as.Date("2022-01-01"), as.Date("2022-04-01")))
 ```
 
 ```{r Top Exporting/Importing}

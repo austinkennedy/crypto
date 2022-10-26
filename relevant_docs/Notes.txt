@@ -8,3 +8,5 @@ kaiko.com has transaction-level data as well
 http://api.bitcoincharts.com/v1/csv/ has csv's of trades...unsure of accuracy or source. Doesn't go past 2019 (for any currency) as far as I know.
 
 https://bitcoincharts.com/ 
+
+Volume for local btc, paxful: coindance
