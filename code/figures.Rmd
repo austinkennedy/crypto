@@ -14,31 +14,48 @@ options(scipen=999)
 
 ```{r Load Packages}
 library(tidyverse)
+library(vroom)
+library(lubridate)
 ```
 
-```{r Load Data}
-trades_matched <- read.csv('../temporary/matched_trades.csv')
+```{r Load Trade Data}
+trades_matched <- vroom('../temporary/matched_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+```
+
+```{r Load Transaction Data}
+trades <- vroom('../temporary/trades_cleaned.csv')
+trades$date <- as.POSIXct(trades$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 ```
 
 
 ```{r Functions}
 
-agg_outflow <- function(data, country){
-  outflows <- data %>%
-    filter((Currency == toString(country)) & (Currency2 != toString(country)))
+get_volume <- function(data, currency, window){
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, window))) %>%
+    summarise(volume = sum({{currency}}))
   
-  p <- ggplot(outflows)
+  return(df)
 }
+
+
+# agg_outflow <- function(data, country){
+#   outflows <- data %>%
+#     filter((Currency == toString(country)) & (Currency2 != toString(country)))
+#   
+#   p <- ggplot(outflows)
+# }
 
 ```
 
 
-```{r Test Code}
+
+```{r Russia-Ukraine}
 agg <- trades_matched %>%
   filter((Currency == "RUB"))  %>%
   group_by(daily = as.Date(date)) %>%
-  summarise(volume = sum(nominal_amount))
+  summarise(volume = sum(amount_nominal))
 
 vline <- which(agg$daily %in% as.Date(c("2022-02-24")))
 
@@ -108,6 +125,13 @@ ggplot(agg_importers, aes(x=monthly, y=volume, color = Currency2)) +
 ggsave("../output/importers_full.png")
 ```
 
+```{r Test Code}
+trade_volume <- get_volume(trades, amount_usd, 'week')
+
+ggplot(trade_volume, aes(x=time, y = volume)) +
+  geom_line()
+
+```
 
 
 
