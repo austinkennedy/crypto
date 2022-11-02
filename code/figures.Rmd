@@ -18,7 +18,7 @@ library(vroom)
 library(lubridate)
 ```
 
-```{r Load Trade Data}
+```{r Load Matched Trades Data}
 trades_matched <- vroom('../temporary/matched_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 ```
@@ -30,15 +30,22 @@ trades$date <- as.POSIXct(trades$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
 
 ```{r Functions}
-
-get_volume <- function(data, currency, window){
+#unit should be in the form of "amount" (for BTC), "amount_nominal" (domestic currency), or "amount_usd"
+get_volume <- function(data, unit, window){
   df <- data %>%
     group_by(time = as.Date(floor_date(date, window))) %>%
-    summarise(volume = sum({{currency}}))
+    summarise(volume = sum({{unit}}))
   
   return(df)
 }
 
+get_volume_price <- function(data, unit, window){
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, window))) %>%
+    summarise(volume = sum({{unit}}), price = mean(Close))
+  
+  return(df)
+}
 
 # agg_outflow <- function(data, country){
 #   outflows <- data %>%
@@ -128,9 +135,16 @@ ggsave("../output/importers_full.png")
 ```{r Test Code}
 trade_volume <- get_volume(trades, amount_usd, 'week')
 
-ggplot(trade_volume, aes(x=time, y = volume)) +
-  geom_line()
+trade_volume_price <- get_volume_price(trades, amount_usd, 'week')
 
+ggplot(trade_volume, aes(x=time, y = volume)) +
+  geom_line(color = "blue", size=1) +
+  xlab("") +
+  ylab("USD") +
+  theme_bw() +
+  ggtitle("LocalBitcoins Volume (Weekly)") +
+  scale_y_continuous(breaks = c(50000000, 100000000), labels = c("$50M", "$100M")) +
+  theme(plot.title = element_text(size = 20, hjust = 0.5))
 ```
 
 
