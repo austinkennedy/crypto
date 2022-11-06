@@ -10,3 +10,5 @@ http://api.bitcoincharts.com/v1/csv/ has csv's of trades...unsure of accuracy or
 https://bitcoincharts.com/ 
 
 Volume for local btc, paxful: coindance
+
+https://en.cryptonomist.ch/2019/10/22/localbitcoins-volumes-kyc/ looks like LocalBitcoins began making users verify user identity in 2019 due to regulations in Finland

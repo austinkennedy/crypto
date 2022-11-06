@@ -62,45 +62,50 @@ get_volume_price <- function(data, unit, window){
 agg <- trades_matched %>%
   filter((Currency == "RUB"))  %>%
   group_by(daily = as.Date(date)) %>%
-  summarise(volume = sum(amount_nominal))
+  summarise(volume = sum(amount_usd))
 
 vline <- which(agg$daily %in% as.Date(c("2022-02-24")))
 
 ggplot(agg, aes(x=daily, y=volume)) +
-  geom_line() +
+  geom_line(color = "blue", siize = 0.8) +
   geom_vline(xintercept = as.numeric(agg$daily[vline]), color='red') +
-  xlab("") +
-  ylim(0,5000000) +
-  scale_x_date(limit=c(as.Date("2022-01-01"), as.Date("2022-04-01")))
+  xlab("2022") +
+  ylab("USD") +
+  ylim(0,40000) +
+  scale_x_date(limit=c(as.Date("2022-02-01"), as.Date("2022-09-01"))) +
+  ggtitle('RUB Volume (Daily)(Matched Trades)') +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggsave('../output/figures/russia_vehicle.png')
 ```
 
-```{r Top Exporting/Importing}
+```{r Top Exporting}
 top_export <- trades_matched %>%
   filter(Currency != Currency2) %>%
   group_by(Currency) %>%
-  summarise(total = sum(amount)) %>%
+  summarise(total = sum(amount_usd)) %>%
   arrange(desc(total)) %>%
-  slice(1:10)
+  slice(1:5)
 
 exporters <- top_export$Currency
 
-library(lubridate)
 
 agg_exporters <- trades_matched %>%
   filter((Currency %in% exporters) & (Currency != Currency2)) %>%
-  group_by(Currency, monthly = as.Date(floor_date(date, "month"))) %>%
-  summarise(volume = sum(amount))
+  group_by(Currency, time = as.Date(floor_date(date, "month"))) %>%
+  summarise(volume = sum(amount_usd))
 
-ggplot(agg_exporters, aes(x=monthly, y=volume, color = Currency)) +
-  geom_line() +
+ggplot(agg_exporters, aes(x=time, y=volume, color = Currency)) +
+  geom_line(size=0.8) +
   xlab("") +
-  ylim(0,300) +
+  # ylim(0,300) +
   theme_bw() +
   ggtitle("Top Exporters")
 
   # scale_x_date(limit=c(as.Date("2017-01-01"), as.Date("2022-01-01")))
 
-ggsave("../output/exporters_full.png")
+# ggsave("../output/exporters_full.png")
 
 ```
 
@@ -108,9 +113,9 @@ ggsave("../output/exporters_full.png")
 top_import <- trades_matched %>%
   filter(Currency != Currency2) %>%
   group_by(Currency2) %>%
-  summarise(total = sum(amount)) %>%
+  summarise(total = sum(amount_usd)) %>%
   arrange(desc(total)) %>%
-  slice(1:10)
+  slice(1:5)
 
 importers <- top_import$Currency2
 
@@ -118,34 +123,77 @@ library(lubridate)
 
 agg_importers <- trades_matched %>%
   filter((Currency2 %in% importers) & (Currency != Currency2)) %>%
-  group_by(Currency2, monthly = as.Date(floor_date(date, "month"))) %>%
-  summarise(volume = sum(amount))
+  group_by(Currency2, time = as.Date(floor_date(date, "month"))) %>%
+  summarise(volume = sum(amount_usd))
 
-ggplot(agg_importers, aes(x=monthly, y=volume, color = Currency2)) +
-  geom_line() +
+ggplot(agg_importers, aes(x=time, y=volume, color = Currency2)) +
+  geom_line(size = 0.8) +
   xlab("") +
-  ylim(0,300) +
+  # ylim(0,300) +
   theme_bw() +
   ggtitle("Top Importers") #+
   # scale_x_date(limit=c(as.Date("2020-01-01"), as.Date("2022-01-01")))
 
-ggsave("../output/importers_full.png")
+# ggsave("../output/importers_full.png")
+
 ```
 
-```{r Test Code}
+```{r LocalBitcoins Volume}
 trade_volume <- get_volume(trades, amount_usd, 'week')
 
 trade_volume_price <- get_volume_price(trades, amount_usd, 'week')
 
-ggplot(trade_volume, aes(x=time, y = volume)) +
-  geom_line(color = "blue", size=1) +
+ggplot(trade_volume_price, aes(x=time)) +
+  geom_line(aes(y = volume), color = "blue", size=0.6) +
+  geom_line(aes(y = price*1200), color = "black", size=0.6) +
   xlab("") +
   ylab("USD") +
   theme_bw() +
   ggtitle("LocalBitcoins Volume (Weekly)") +
-  scale_y_continuous(breaks = c(50000000, 100000000), labels = c("$50M", "$100M")) +
-  theme(plot.title = element_text(size = 20, hjust = 0.5))
+  scale_y_continuous(breaks = c(50000000, 100000000), labels = c("$50M", "$100M"),
+                     sec.axis = sec_axis(trans = ~./1200, name = "Price")) +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggsave('../output/figures/localbtc_volume_price.png')
+
+# ggplot(trade_volume_price, aes(x=time)) +
+#   geom_line(aes(y = volume), color = "blue", size=0.8) +
+#   xlab("") +  
+#   ylab("USD") +
+#   theme_bw() +
+#   ggtitle("LocalBitcoins Volume (Weekly)") +
+#   scale_y_continuous(breaks = c(50000000, 100000000), labels = c("$50M", "$100M")) +
+#   theme(plot.title = element_text(size = 20, hjust = 0.5))
+# 
+# ggsave('../output/figures/localbtc_volume.png')
 ```
+
+
+```{r Summary Stats}
+
+avg_usd <- mean(trades$amount_usd)
+
+max_usd <- max(trades$amount_usd)
+
+total_volume <- sum(trades$amount_usd)
+```
+
+```{r Cross-Border}
+top_partners <- trades_matched %>%
+  filter(Currency != Currency2) %>%
+  group_by(Currency, Currency2) %>%
+  summarise(trade = sum(amount_usd))
+
+top_partners <- top_partners %>%
+  arrange(desc(trade))
+```
+
+
+
+
+
+
+
 
 
 
