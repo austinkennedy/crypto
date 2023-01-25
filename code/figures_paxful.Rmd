@@ -1,0 +1,186 @@
+---
+title: "figures_paxful"
+author: "Austin Kennedy"
+date: '2022-11-14'
+output: html_document
+---
+
+
+```{r Clear memory and setup}
+rm(list=ls())
+options(scipen=999)
+```
+
+
+```{r Load Packages}
+library(tidyverse)
+library(vroom)
+library(lubridate)
+```
+
+```{r Load all trades}
+trades <- vroom('../temporary/trades_paxful_cleaned.csv')
+trades$date <- as.POSIXct(trades$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+```
+
+```{r Load matched trades}
+trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
+trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+```
+
+```{r Functions}
+#unit should be in the form of "amount" (for BTC), "amount_nominal" (domestic currency), or "amount_usd"
+get_volume <- function(data, unit, period){
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, period))) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}
+get_volume_price <- function(data, unit, period){
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, period))) %>%
+    summarise(volume = sum({{unit}}), price = mean(crypto_rate_usd))
+  
+  return(df)
+}
+
+get_agg_outflows <- function(data, country_code, period){
+  cc <- toString(country_code)
+  df <- data %>%
+    filter(user_cc == cc & user_cc2 != cc) %>%
+    group_by(time = as.Date(floor_date(date, period))) %>%
+    summarise(volume = sum(amount_usd))
+}
+
+get_agg_inflows <- function(data, country_code, period){
+  cc <- toString(country_code)
+  df <- data %>%
+    filter(user_cc != cc & user_cc2 == cc) %>%
+    group_by(time = as.Date(floor_date(date, period))) %>%
+    summarise(volume = sum(amount_usd))
+}
+
+# agg_outflow <- function(data, country){
+#   outflows <- data %>%
+#     filter((Currency == toString(country)) & (Currency2 != toString(country)))
+#   
+#   p <- ggplot(outflows)
+# }
+```
+
+```{r Overall paxful volume}
+trade_volume <- get_volume(trades, amount_usd, 'week')
+
+ggplot(trade_volume, aes(x = time, y = volume)) +
+  geom_line(color = 'blue', size = 0.6) +
+  xlab("") +
+  ylab("USD") +
+  theme_bw() +
+  scale_x_date(limit = c(as.Date('2017-03-01'), as.Date('2022-09-01'))) +
+  ggtitle("Paxful Volume (Weekly)")
+
+ggsave('../output/figures_paxful/paxful_volume.png')
+```
+
+
+```{r Overall volume with price}
+trade_volume_price <- get_volume_price(trades, amount_usd, 'week')
+
+ggplot(trade_volume_price, aes(x=time)) +
+  geom_line(aes(y = volume), color = "blue", size=0.6) +
+  geom_line(aes(y = price*1200), color = "black", size=0.6) +
+  xlab("") +
+  ylab("USD") +
+  theme_bw() +
+  ggtitle("Paxful Volume (Weekly)") +
+  scale_x_date(limit = c(as.Date('2017-03-01'), as.Date('2022-09-01'))) +
+  scale_y_continuous(sec.axis = sec_axis(trans = ~./1200, name = "Price")) +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggsave('../output/figures_paxful/paxful_volume_price.png')
+```
+
+```{r Russia-Ukraine total vol}
+agg <- trades %>%
+  filter(currency == 'VEF'|currency == 'VES') %>%
+  group_by(daily = as.Date(floor_date(date, 'week'))) %>%
+  summarise(volume = sum(amount_usd))
+
+vline <- which(agg$daily %in% as.Date(c("2022-02-24")))
+
+ggplot(agg, aes(x=daily, y=volume)) +
+  geom_line(color = "blue", size = 0.8) +
+  geom_vline(xintercept = as.numeric(agg$daily[vline]), color='red') +
+  xlab("2022") +
+  ylab("USD") +
+  # ylim(0,40000) +
+  # scale_x_date(limit=c(as.Date("2021-09-01"), as.Date("2022-05-01"))) +
+  ggtitle('Venezuelan Volume (Weekly)') +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggsave('../output/figures_paxful/Venezuela.png')
+```
+
+```{r Get payment methods}
+trades <- trades %>%
+  mutate(counter = rep(1, nrow(trades)))
+
+top_methods <- trades %>%
+  filter(currency == 'USD') %>%
+  group_by(payment_method) %>%
+  summarise(freq = sum(counter)) %>%
+  arrange(desc(freq))
+
+```
+
+```{r Cross-Border}
+top_partners <- trades_matched %>%
+  filter(currency != currency2) %>%
+  group_by(currency, currency2) %>%
+  summarise(trade = sum(amount_usd))
+top_partners <- top_partners %>%
+  arrange(desc(trade))
+```
+
+```{r Stimulus Checks}
+agg <- get_agg_outflows(trades_matched, 'US', 'week')
+
+
+
+# agg <- trades_matched %>%
+#   filter(user_cc == "US" & user_cc2 != "US") %>%
+#   group_by(time = as.Date(floor_date(date, 'week'))) %>%
+#   summarise(volume = sum(amount_usd))
+
+stimulus1 <- which(agg$time %in% as.Date(c("2020-04-05")))
+stimulus2 <- which(agg$time %in% as.Date(c("2021-01-03")))
+stimulus3 <- which(agg$time %in% as.Date(c("2021-03-07")))
+
+ggplot(agg, aes(x=time, y=volume)) +
+  geom_line(color = "blue", size = 0.8) +
+  geom_vline(xintercept = as.numeric(agg$time[stimulus1]), color='red', size =0.8) +
+  geom_vline(xintercept = as.numeric(agg$time[stimulus2]), color = 'red', size = 0.8) +
+  geom_vline(xintercept = as.numeric(agg$time[stimulus3]), color = 'red', size = 0.8) +
+  xlab("time") +
+  ylab("USD") +   
+  # ylim(0,40000) +
+  # scale_x_date(limit=c(as.Date("2021-09-01"), as.Date("2022-05-01"))) +
+  ggtitle('Outflows from US') +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5))
+
+ggsave('../output/figures_paxful/stimulus_timing.png')
+```
+
+
+```{r Test code}
+currencies <- unique(trades$currency)
+sort(currencies)
+
+```
+
+
+
