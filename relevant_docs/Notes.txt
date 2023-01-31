@@ -12,3 +12,8 @@ https://bitcoincharts.com/
 Volume for local btc, paxful: coindance
 
 https://en.cryptonomist.ch/2019/10/22/localbitcoins-volumes-kyc/ looks like LocalBitcoins began making users verify user identity in 2019 due to regulations in Finland
+
+ACS in R
+https://walker-data.com/umich-workshop-2022/acs-data/#15
+
+census API key: 98c004c5e091cec7290cfdb00ae23e076895c593

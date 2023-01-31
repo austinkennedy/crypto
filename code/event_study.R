@@ -6,6 +6,7 @@ options(scipen=999)
 library(tidyverse)
 library(vroom)
 library(lubridate)
+library(fuzzyjoin)
 
 #load matched trades
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
@@ -62,13 +63,23 @@ weekly <- outflow_volume_total(outflows_us, amount_usd, 'week')
 
 weekly_country <- outflow_volume_country(outflows_us, amount_usd, 'week')
 
+weekly_country <- left_join(weekly_country, codes, by = c("user_cc2" = "Code"))
+
+weekly_country <- left_join(weekly_country, acs, by = c("Name" = "country"))
 
 
+############Playground
 
+codes$Name <- gsub("(.*),.*", "\\1", codes$Name)
 
-
-
-
+country_merge <- stringdist_join(acs, codes,
+                                 by = c("country" = "Name"),
+                                 mode = "left",
+                                 method = "jw",
+                                 max_dist = 0.1,
+                                 distance_col = 'dist') %>%
+  group_by(Name) %>%
+  slice_min(order_by = dist, n=1)
 
 
 
