@@ -26,3 +26,8 @@ Things to clean up:
 Check that API requests were made correctly
 
 Some country codes in the paxful data are "
+
+Things to keep track of:
+
+-Population data from World Bank
+-Changed Slovakia (SK) to Czech Republic (CZ) in trade data

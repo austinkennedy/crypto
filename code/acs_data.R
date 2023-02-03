@@ -32,6 +32,8 @@ codes$Name <- str_replace(codes$Name, "Saint", "St.")
 
 codes_merged <- crypto_cc %>% inner_join(codes, by = c("cc" = "Code"))
 
+codes_merged <- codes_merged %>% filter(!(Name == "Niger"))
+
 #manually change some labels that don't do well in fuzzy matching (arggg why does ACS not use standardized country names??)
 fb_1yr$label <- case_match(fb_1yr$label,
                            "United Kingdom (inc. Crown Dependencies):" ~ "United Kingdom",
@@ -54,7 +56,12 @@ country_merge <- stringdist_join(fb_1yr, codes_merged,
                                  distance_col = 'dist') %>%
   group_by(Name) %>%
   slice_min(order_by = dist, n=1) %>%
-  drop_na()
+  drop_na() %>%
+  ungroup()
+
+country_merge <- country_merge %>%
+  select(-c(Name, dist)) %>%
+  relocate(label)
 
 
 #####Playground
