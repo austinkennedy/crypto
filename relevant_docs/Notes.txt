@@ -17,3 +17,12 @@ ACS in R
 https://walker-data.com/umich-workshop-2022/acs-data/#15
 
 census API key: 98c004c5e091cec7290cfdb00ae23e076895c593
+
+
+Things to clean up:
+
+***Properly do trade matching algorithm***
+
+Check that API requests were made correctly
+
+Some country codes in the paxful data are "
