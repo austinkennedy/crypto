@@ -18,3 +18,40 @@ get_clean_fb_acs <- function(yr, type){
     
   
 }
+
+get_total_volume <- function(data, unit, interval){
+  #get volume at different intervals
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval))) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}
+
+outflow_volume_total <- function(data, unit, interval){
+  #get volume at different intervals
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval))) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}
+
+outflow_volume_country <- function(data, unit, interval){
+  #get volume at different intervals, by receiving country
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval)),
+             user_cc2) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}

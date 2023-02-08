@@ -7,80 +7,43 @@ library(tidyverse)
 library(vroom)
 library(lubridate)
 library(fuzzyjoin)
+library(fixest)
+
+source('functions.R')
 
 #load matched trades
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
-acs <- read.csv("../temporary/acs_foreignborn_2019_cleaned.csv")
-codes <- read.csv("../input/country_codes_alpha_2.csv")
+country_data <- read.csv('../temporary/country_data.csv')
 
 #US outflows
 outflows_us <- trades_matched %>%
   filter(user_cc == "US" & user_cc2 != "US")
 
-#functions
+#get weekly volume
+weekly_country <- outflow_volume_country(outflows_us, amount_usd, 'month')
 
-get_total_volume <- function(data, unit, interval){
-#get volume at different intervals
-#'data' should be a dataframe of matched or unmatched crypto trades
-#'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
-#'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
-  df <- data %>%
-    group_by(time = as.Date(floor_date(date, interval))) %>%
-    summarise(volume = sum({{unit}}))
-  
-  return(df)
-}
+#join crypto and foreign-born data
+df <- inner_join(weekly_country, country_data, by = c("user_cc2" = "alpha.2"))
 
-outflow_volume_total <- function(data, unit, interval){
-  #get volume at different intervals
-  #'data' should be a dataframe of matched or unmatched crypto trades
-  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
-  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
-  df <- data %>%
-    group_by(time = as.Date(floor_date(date, interval))) %>%
-    summarise(volume = sum({{unit}}))
-  
-  return(df)
-}
+#add treatment and pre-post
+treatment <- as.Date('2020-04-01')
 
-outflow_volume_country <- function(data, unit, interval){
-  #get volume at different intervals, by receiving country
-  #'data' should be a dataframe of matched or unmatched crypto trades
-  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
-  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
-  df <- data %>%
-    group_by(time = as.Date(floor_date(date, interval)),
-             user_cc2) %>%
-    summarise(volume = sum({{unit}}))
-  
-  return(df)
-}
+df <- df %>%
+  mutate(post = ifelse(time >= treatment, 1, 0),
+         treat = ifelse(fb1_per1000 >= median(sort(unique(fb1_per1000))), 1, 0),
+         time_to_treat = as.numeric(round(difftime(time, treatment, units = 'months'))))
 
+est_did <- df %>%
+  filter(time_to_treat < 10 & time_to_treat > -10) %>%
+  feols(volume ~ i(time_to_treat, treat, ref = 0)|label + time_to_treat)
 
+summary(est_did)
 
-weekly <- outflow_volume_total(outflows_us, amount_usd, 'week')
-
-weekly_country <- outflow_volume_country(outflows_us, amount_usd, 'week')
-
-weekly_country <- left_join(weekly_country, codes, by = c("user_cc2" = "Code"))
-
-weekly_country <- left_join(weekly_country, acs, by = c("Name" = "country"))
-
+iplot(est_did)
 
 ############Playground
 
-codes$Name <- gsub("(.*),.*", "\\1", codes$Name)
-
-country_merge <- stringdist_join(acs, codes,
-                                 by = c("country" = "Name"),
-                                 mode = "left",
-                                 method = "jw",
-                                 max_dist = 0.1,
-                                 distance_col = 'dist') %>%
-  group_by(Name) %>%
-  slice_min(order_by = dist, n=1)
-
-
+test <- tibble(time = df$time, time_to_treat = as.numeric(round(difftime(df$time, treatment, units = 'weeks'))))
 
 
