@@ -21,6 +21,8 @@ crypto_cc <- read.csv('../temporary/paxful_cc.csv')
 cc_all <- read.csv('../input/all_cc_codes.csv')
 pop <- read.csv('../input/un_pop.csv')
 
+
+
 fb_1yr <- fb_1yr %>%
   rename(c(fb1 = 'estimate', moe1 = 'moe'))
 
