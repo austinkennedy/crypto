@@ -50,8 +50,36 @@ outflow_volume_country <- function(data, unit, interval){
   #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
   df <- data %>%
     group_by(time = as.Date(floor_date(date, interval)),
+             user_cc,
              user_cc2) %>%
     summarise(volume = sum({{unit}}))
   
   return(df)
 }
+
+trade_count <- function(data, interval){
+  #Get number of trades over intervals
+  #'data' should be a df of matched or unmatched crypto trades
+  #'interval' indicates the desired interval. Provide a string such as 'day', 'week', 'month', etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval)),
+             user_cc2) %>%
+    summarise(total_trades = n())
+  
+  return(df)
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
