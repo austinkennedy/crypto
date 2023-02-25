@@ -7,6 +7,7 @@ library(tidycensus)
 library(lubridate)
 library(fuzzyjoin)
 library(stringr)
+library(zoo)
 
 source("functions.R")
 
@@ -20,9 +21,10 @@ codes <- read.csv("../input/country_codes_alpha_2.csv")
 crypto_cc <- read.csv('../temporary/paxful_cc.csv')
 cc_all <- read.csv('../input/all_cc_codes.csv')
 pop <- read.csv('../input/un_pop.csv')
+fees <- read.csv('../input/wb_remittance_prices.csv')
 
 
-
+#ACS data
 fb_1yr <- fb_1yr %>%
   rename(c(fb1 = 'estimate', moe1 = 'moe'))
 
@@ -33,7 +35,29 @@ fb <- inner_join(fb_1yr, fb_5yr, by = 'label') %>%
   select(-c(geography)) %>%
   relocate(label)
 
+#Remittance Fee data
 
+#Format dates
+fees$period <- fees$period %>%
+  paste0('-01') %>%
+  as.yearqtr(format = '%Y_%qQ-%d') %>%
+  as.yearmon() %>%
+  as.Date()
+
+#Get yearly fee stats
+fees_yearly <- fees %>%
+  group_by(time = as.Date(floor_date(period, 'year')),
+           source_code,
+           destination_code) %>%
+  summarise(fees_avg = mean(cc1.total.cost..),
+            fees_median = median(cc1.total.cost..),
+            .groups = 'keep')
+
+fees_us <- fees_yearly %>%
+  filter(source_code == 'USA',
+         time == '2019-01-01') %>%
+  ungroup() %>%
+  select(-c(time))
 
 
 codes$Name <- case_match(codes$Name,
@@ -99,6 +123,8 @@ country_data <- inner_join(country_merge_all, pop, by = c("alpha.3" = "ISO3_code
   select(-c(Time, Location)) %>%
   mutate(fb1_per1000 = fb1 / PopTotal, #foreign born per capita
          fb5_per1000 = fb5 / PopTotal)
+
+country_data <- left_join(country_data, fees_us, by = c('alpha.3' = 'destination_code'))
 
 #export
 write.csv(country_data, '../temporary/country_data.csv')

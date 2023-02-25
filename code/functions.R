@@ -80,6 +80,3 @@ trade_count <- function(data, interval){
 
 
 
-
-
-

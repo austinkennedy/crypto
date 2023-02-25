@@ -17,8 +17,20 @@ trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:
 country_data <- read.csv('../temporary/country_data.csv')
 
 #create treated vs. untreated
+#Migrant stock per capita as treatment
+# country_data <- country_data %>%
+#   mutate(treat = ifelse(fb1_per1000 >= median(sort(fb1_per1000)), 1,0))
+
+#Migrant stock itself as treatment
 country_data <- country_data %>%
-  mutate(treat = ifelse(fb1_per1000 >= median(sort(fb1_per1000)), 1,0))
+  mutate(treat = ifelse(fb1 >= median(sort(fb1)), 1,0))
+
+#Remittance fees as treatment
+# country_data <- country_data %>%
+#   mutate(treat = ifelse(fees_median >= median(sort(fees_median)), 1,0)) %>%
+#   drop_na(treat)
+
+
 
 #US outflows
 outflows_us <- trades_matched %>%
@@ -38,13 +50,7 @@ df <- df %>%
   mutate(post = ifelse(time >= treatment, 1, 0),
          time_to_treat = as.numeric(round(difftime(time, treatment, units = 'weeks'))))
 
-est_did <- df %>%
-  filter(time_to_treat < 30 & time_to_treat > -30) %>%
-  feols(volume ~ i(time_to_treat, treat, ref = 0)|label + time_to_treat + region)
-
-summary(est_did)
-
-iplot(est_did)
+ 
 
 
 
@@ -98,6 +104,7 @@ summary(est_did)
 
 iplot(est_did)
 
+#Remittance fees as treatment
 
 
 
