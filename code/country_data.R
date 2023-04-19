@@ -22,6 +22,7 @@ crypto_cc <- read.csv('../temporary/paxful_cc.csv')
 cc_all <- read.csv('../input/all_cc_codes.csv')
 pop <- read.csv('../input/un_pop.csv')
 fees <- read.csv('../input/wb_remittance_prices.csv')
+income_groups <- read.csv('../input/income_groups.csv')
 
 
 #ACS data
@@ -124,7 +125,24 @@ country_data <- inner_join(country_merge_all, pop, by = c("alpha.3" = "ISO3_code
   mutate(fb1_per1000 = fb1 / PopTotal, #foreign born per capita
          fb5_per1000 = fb5 / PopTotal)
 
+#Remittance Fees
 country_data <- left_join(country_data, fees_us, by = c('alpha.3' = 'destination_code'))
+
+#income groups
+country_data <- left_join(country_data, income_groups, by = c('alpha.3' = 'alpha3')) %>%
+  select(-c(country))
+
+#Above/below median foreign born per capita (of origin country)
+country_data <- country_data %>%
+  mutate(fb_pc_above = ifelse(fb1_per1000 >= median(sort(fb1_per1000)), 1,0))
+
+#Above/below median foreign born in US
+country_data <- country_data %>%
+  mutate(fb_above = ifelse(fb1 >= median(sort(fb1)), 1,0))
+
+#Above/below median remittance fee
+country_data <- country_data %>%
+  mutate(fees_above = ifelse(fees_median >= median(sort(fees_median)), 1,0))
 
 #export
 write.csv(country_data, '../temporary/country_data.csv')

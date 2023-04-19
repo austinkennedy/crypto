@@ -89,15 +89,24 @@ ggsave('../output/figures_paxful/paxful_volume.png')
 trade_volume_price <- get_volume_price(trades, amount_usd, 'week')
 
 ggplot(trade_volume_price, aes(x=time)) +
-  geom_line(aes(y = volume), color = "blue", size=0.6) +
-  geom_line(aes(y = price*1200), color = "black", size=0.6) +
+  geom_line(aes(y = volume, color = "Volume"), size=0.6) +
+  geom_line(aes(y = price*1200, color = 'Bitcoin Price'), size=0.6) +
   xlab("") +
-  ylab("USD") +
+  ylab("Volume (USD)") +
   theme_bw() +
   ggtitle("Paxful Volume (Weekly)") +
   scale_x_date(limit = c(as.Date('2017-03-01'), as.Date('2022-09-01'))) +
-  scale_y_continuous(sec.axis = sec_axis(trans = ~./1200, name = "Price")) +
-  theme(plot.title = element_text(size = 15, hjust = 0.5))
+  scale_y_continuous(sec.axis = sec_axis(trans = ~./1200, name = "USD/Bitcoin")) +
+  scale_color_manual(name = "Legend", values = c(
+    'Volume' = 'blue',
+    'Bitcoin Price' = 'black'
+  )) +
+  theme(plot.title = element_text(size = 15, hjust = 0.5),
+        legend.position = c(0.15,0.85),
+        legend.background = element_rect(fill = "white",
+                                         size = 0.3,
+                                         linetype = "solid",
+                                         color = 'black'))
 
 ggsave('../output/figures_paxful/paxful_volume_price.png')
 ```

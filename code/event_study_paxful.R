@@ -16,32 +16,15 @@ trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 country_data <- read.csv('../temporary/country_data.csv')
 
-# create treated vs. untreated
-#Migrant stock per capita as treatment
-country_data <- country_data %>%
-  mutate(fb_pc_above = ifelse(fb1_per1000 >= median(sort(fb1_per1000)), 1,0))
-
-#Migrant stock itself as treatment
-country_data <- country_data %>%
-  mutate(fb_above = ifelse(fb1 >= median(sort(fb1)), 1,0))
-
-# Remittance fees as treatment
-country_data <- country_data %>%
-  mutate(fees_above = ifelse(fees_median >= median(sort(fees_median)), 1,0))
-
-
-
 #US outflows
 outflows_us <- trades_matched %>%
   filter(user_cc == "US" & user_cc2 != "US")
 
+#get volume
+volume_country <- outflow_volume_country(outflows_us, amount_usd, 'week')
 
-#get weekly volume
-weekly_country <- outflow_volume_country(outflows_us, amount_usd, 'week')
-
-#join crypto and foreign-born data
-df <- inner_join(weekly_country, country_data, by = c("user_cc2" = "alpha.2"))
-
+#join crypto and country data
+df <- inner_join(volume_country, country_data, by = c("user_cc2" = "alpha.2"))
 
 
 #add treatment and pre-post
@@ -56,6 +39,7 @@ df <- df %>%
 
  
 xlim_iplot <- c(.5,-.4)
+
 
 setFixest_coefplot(xlim.add = c(.5, -.4), xlab = "Date", ylab = "ln(Volume)")
 
@@ -73,7 +57,7 @@ iplot(est_did_fb, main = 'Above vs. below median median foreign born population'
 
 est_did_fee <- df %>%
   drop_na(fees_above) %>%
-  feols(log(volume) ~ i(time, fees_above, ref = "2020-04-05")|label + time, cluster = 'label')
+  feols(log(volume) ~ i(time, fees_above, ref = "2020-04-05")|label + time + label^month, cluster = 'label')
 
 summary(est_did_fee)
 

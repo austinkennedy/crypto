@@ -32,3 +32,4 @@ Things to keep track of:
 -Population data from World Bank - deleted first 4 rows (empty space) #########NOT ANYMORE, DID NOT HAVE TAIWAN
 -Population data from UN -https://population.un.org/wpp/Download/Standard/CSV/
 -Changed Slovakia (SK) to Czech Republic (CZ) in trade data
+-Income groups from WB Development Indicators
