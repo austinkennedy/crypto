@@ -37,24 +37,68 @@ df <- df %>%
          month = month(time),
          year = year(time))
 
-est_did_fb <- df %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(log(volume) ~ i(post, log(fb1), ref = 0) + i(post, ref = 0) + log(fb1), cluster = 'time')
-
-summary(est_did_fb)
-
-est_did_fee <- df %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(log(volume) ~ i(post, fees_median, ref = 0) + i(post, ref = 0) + fees_median, cluster = 'time')
-
-summary(est_did_fee)
+basic_reg_fml <- as.formula('log(volume) ~ log(fb1)*fees_median + log(fb1) + fees_median')
 
 basic_reg <- df %>%
-  feols(log(volume) ~ log(fb1)*fees_median + log(fb1) + fees_median)
+  feols(basic_reg_fml)
 
 summary(basic_reg)
 
+basic_reg_lowermiddle <- df %>%
+  filter(income_group %in% c('L', 'LM')) %>%
+  feols(basic_reg_fml)
 
+summary(basic_reg_lowermiddle)
+
+basic_reg_developed <- df %>%
+  filter(!(income_group %in% c('L', 'LM'))) %>%
+  feols(basic_reg_fml)
+
+summary(basic_reg_developed)
+
+fb_did <- as.formula('log(volume) ~ i(post, log(fb1), ref = 0) + i(post, ref = 0) + log(fb1)')
+
+model_fb_full <- df %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fb_did, cluster = 'time')
+
+summary(model_fb_full)
+
+model_fb_lowermiddle <- df %>%
+  filter(income_group %in% c('L', 'LM'),
+         time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fb_did, cluster = 'time')
+
+summary(model_fb_lowermiddle)
+
+model_fb_developed <- df %>%
+  filter(!(income_group %in% c('L', 'LM')),
+         time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fb_did, cluster = 'time')
+
+summary(model_fb_developed)
+  
+fee_fml <- as.formula('log(volume) ~ i(post, fees_median, ref = 0) + i(post, ref = 0) + fees_median')
+
+model_fee_full <- df %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fee_fml, cluster = 'time')
+
+summary(model_fee_full)
+
+model_fee_lowermiddle <- df %>%
+  filter(income_group %in% c('L', 'LM'),
+         time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fee_fml, cluster = 'time')
+
+summary(model_fee_lowermiddle)
+
+model_fee_developed <- df %>%
+  filter(!(income_group %in% c('L', 'LM')),
+         time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(fee_fml, cluster = 'time')
+
+summary(model_fee_developed)
 
 
 
