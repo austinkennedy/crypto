@@ -124,16 +124,16 @@ us_outflows_country <- us_outflows_country %>%
          disbursed = ifelse(time >= disbursement, 1, 0)
          )
 
-phases_flows_fml <- as.formula('log(volume) ~ i(announced, us_outflow, ref = 0) + i(disbursed, us_outflow, ref = 0) + i(announced, ref = 0) + i(disbursed, ref = 0) + i(us_outflow, ref = 0)|time + label')
+# phases_flows_fml <- as.formula('log(volume) ~ i(announced, us_outflow, ref = 0) + i(disbursed, us_outflow, ref = 0) + i(announced, ref = 0) + i(disbursed, ref = 0) + i(us_outflow, ref = 0)')
 
-# phases_flows_fml <- as.formula('log(volume) ~ i(disbursed, us_outflow, ref = 0)|time + label')
+phases_flows_fml <- as.formula('log(volume) ~ i(disbursed, us_outflow, ref = 0)|time + user_cc^user_cc2')
 
 model_phases_flows <- flows_country %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(phases_flows_fml, cluster = 'time')
+  feols(log(volume) ~ disbursed*us_outflow|time + user_cc^user_cc2, cluster = 'time')
 
 summary(model_phases_flows)
-
+  
 model_phases_flows_lowermiddle <- flows_country %>%
   filter(income_group %in% c('L', 'LM'),
          time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
@@ -155,7 +155,9 @@ model_phases_flows_highfee <- flows_country %>%
 
 summary(model_phases_flows_highfee)
 
-phases_fb_fml <- as.formula('log(volume) ~ i(announced, log(fb1), ref = 0) + i(disbursed, log(fb1), ref = 0) + i(announced, ref = 0) + i(disbursed, ref = 0) + log(fb1)')
+# phases_fb_fml <- as.formula('log(volume) ~ i(announced, log(fb1), ref = 0) + i(disbursed, log(fb1), ref = 0) + i(announced, ref = 0) + i(disbursed, ref = 0) + log(fb1)')
+
+phases_fb_fml <- as.formula('log(volume) ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2')
 
 model_phases_fb <- us_outflows_country %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
@@ -177,37 +179,62 @@ model_phases_fb_developed <- us_outflows_country %>%
 
 summary(model_phases_fb_developed)
 
-
-phases_fees_fml <- as.formula('log(volume) ~ i(announced, fees_median, ref = 0) + i(disbursed, fees_median, ref = 0) + i(announced, ref = 0) + i(disbursed, ref = 0) + fees_median')
-
-model_phases_fees <- us_outflows_country %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(phases_fees_fml, cluster = 'time')
-
-summary(model_phases_fees)
-
-model_phases_fees_lowermiddle <- us_outflows_country %>%
-  filter(income_group %in% c('L', 'LM'),
+model_phases_fb_highfee <- us_outflows_country %>%
+  filter(fees_above == 1,
          time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(phases_fees_fml, cluster = 'time')
+  feols(phases_fb_fml, cluster = 'time')
 
-summary(model_phases_fees_lowermiddle)
-
-model_phases_fees_developed <- us_outflows_country %>%
-  filter(!(income_group %in% c('L', 'LM')),
-         time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(phases_fees_fml, cluster = 'time')
-
-summary(model_phases_fees_developed)
-
-
+summary(model_phases_fb_highfee)
 
 #Create and Export Tables
 
 #Get models in list for modelsummary
+flows_models <- list("Full Sample" = model_phases_flows,
+                  "Lower and Lower-Middle Income" = model_phases_flows_lowermiddle,
+                  "Upper-Middle and High Income" = model_phases_flows_developed)
+
+cm_flows <- c("disbursed::1:us_outflow" = "$\\text{disbursed} \\times \\text{US-outflow}$")
+
+gof_omitted_flows <- "AIC|BIC|RMSE|Std.Errors|R2 Within"
+
+note_flows <- "Standard errors clustered at the day level."
+
+gm_flows <- tribble(~raw, ~clean, ~fmt,
+                    "FE: time", "Day FE", "%.4f",
+                    "FE: user_cc^user_cc2", "Country-Pair FE", "%.4f",
+                    "nobs", "N", "%.0f",
+                    "r.squared", "$R^{2}$", "%.2f",
+                    "adj.r.squared", "$R^{2} Adj.$", "%.2f")
+
+# modelsummary(flows_models,
+#              stars = TRUE,
+#              coef_map = cm_flows,
+#              gof_omit = gof_omitted_flows,
+#              gof_map = gm_flows,
+#              title = "Dependent Variable: $ln(\\text{CryptoOutflows})$",
+#              escape = FALSE,
+#              notes = note_flows,
+#              threeparttable = TRUE,
+#              output = '../output/regression_tables/flows_table.tex')
+
+flows_table <- modelsummary(flows_models,
+             stars = TRUE,
+             coef_map = cm_flows,
+             gof_omit = gof_omitted_flows,
+             gof_map = gm_flows,
+             title = "Dependent Variable: $ln(\\text{CryptoOutflows})$",
+             escape = FALSE,
+             fmt = "%.4f",
+             output = "latex") %>%
+  add_footnote(note_flows, threeparttable = TRUE)
+
+kableExtra::save_kable(flows_table, file = '../output/regression_tables/flows_table.tex')
+
+#Get models in list for modelsummary
 fb_phases <- list("Full Sample" = model_phases_fb,
                   "Lower and Lower-Middle Income" = model_phases_fb_lowermiddle,
-                  "Upper-Middle and High Income" = model_phases_fb_developed)
+                  "Upper-Middle and High Income" = model_phases_fb_developed,
+                  "Above Median Remittance Fee" = model_phases_fb_highfee)
 
 cm_fb <- c("disbursed::1:log(fb1)" = "$\\text{disbursed} \\times ln(\\text{FB})$",
            "announced::1:log(fb1)" = "$\\text{announced} \\times ln(\\text{FB})$",
@@ -217,61 +244,42 @@ cm_fb <- c("disbursed::1:log(fb1)" = "$\\text{disbursed} \\times ln(\\text{FB})$
 
 gof_omitted_fb <- "AIC|BIC|RMSE|Std.Errors"
 
+gm_fb <- tribble(~raw, ~clean, ~fmt,
+                    "FE: time", "Day FE", "%.4f",
+                    "FE: user_cc2", "Country FE", "%.4f",
+                    "nobs", "N", "%.0f",
+                    "r.squared", "$R^{2}$", "%.2f",
+                    "adj.r.squared", "$R^{2} Adj.$", "%.2f")
+
 note_fb <- "Standard errors clustered at the day level."
 
 coef_omitted_fb <- "(Intercept)"
 
-modelsummary(fb_phases,
-                       stars = TRUE,
-                       coef_map = cm_fb,
-                       coef_omit = coef_omitted_fb,
-                       gof_omit = gof_omitted_fb,
-                       title = "Dependent Variable: $ln(\\text{Volume})$",
-                       escape = FALSE,
-                       threeparttable = TRUE,
-                       notes = note_fb,
-                       output = '../output/regression_tables/phases_fb.tex')
+# modelsummary(fb_phases,
+#                        stars = TRUE,
+#                        coef_map = cm_fb,
+#                        coef_omit = coef_omitted_fb,
+#                        gof_omit = gof_omitted_fb,
+#                        title = "Dependent Variable: $ln(\\text{CryptoOutflows})$",
+#                        escape = FALSE,
+#                        threeparttable = TRUE,
+#                        notes = note_fb,
+#                        output = '../output/regression_tables/phases_fb.tex')
 
-# fb_tab <- modelsummary(fb_phases,
-#              stars = TRUE,
-#              coef_map = cm_fb,
-#              coef_omit = coef_omitted,
-#              gof_omit = gof_omitted,
-#              title = "Dependent Variable: $ln(\\text{Volume})$",
-#              escape = FALSE,
-#              threeparttable = TRUE,
-#              notes = note,
-#              output = 'latex') %>%
-#   column_spec(1:5,width = "1.5in")
-# 
-# kableExtra::save_kable(fb_tab, file = '../output/regression_tables/phases_fb.tex')
+fb_table <- modelsummary(fb_phases,
+                            stars = TRUE,
+                            coef_map = cm_fb,
+                            gof_map = gm_fb,
+                            title = "Dependent Variable: $ln(\\text{CryptoOutflows})$",
+                            escape = FALSE,
+                            fmt = "%.4f",
+                            output = "latex") %>%
+  add_footnote(note_flows, threeparttable = TRUE)
 
-fee_phases <- list("Full Sample" = model_phases_fees,
-                   "Low and Middle Income" = model_phases_fees_lowermiddle,
-                   "High Income" = model_phases_fees_developed)
+kableExtra::save_kable(fb_table, file = '../output/regression_tables/phases_fb.tex')
 
-cm_fees <- c("disbursed::1:fees_median" = "$\\text{disbursed} \\times \\text{Fee}$",
-           "announced::1:fees_median" = "$\\text{announced} \\times \\text{Fee}$",
-           "disbursed::1" = "disbursed",
-           "announced::1" = "announced",
-           "fees_median" = "$\\text{Fee}$")
 
-gof_omitted_fees <- "AIC|BIC|RMSE|Std.Errors"
 
-note_fees <- "Standard errors clustered at the day level."
-
-coef_omitted_fees <- "(Intercept)"
-
-modelsummary(fee_phases,
-                       stars = TRUE,
-                       coef_map = cm_fees,
-                       coef_omit = coef_omitted_fees,
-                       gof_omit = gof_omitted_fees,
-                       title = "Dependent Variable: $ln(\\text{Volume})$",
-                       escape = FALSE,
-                       threeparttable = TRUE,
-                       notes = note_fees,
-                       output = '../output/regression_tables/phases_fees.tex')
 
 
 

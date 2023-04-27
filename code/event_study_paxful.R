@@ -79,21 +79,25 @@ outflows <- trades_matched %>%
   filter(user_cc != user_cc2)
 
 #get volume
-outflows_volume <- outflow_volume_country(outflows, amount_usd, 'week')
+outflows_volume <- outflow_volume_country(outflows, amount_usd, 'day')
 
-treatment <- as.Date('2020-04-09')
+df <- inner_join(outflows_volume, country_data, by = c("user_cc2" = "alpha.2"))
+
+disbursement <- as.Date('2020-04-09')
 
 #create treated, post, time to treatment
-outflows_volume <- outflows_volume %>%
+df <- df %>%
   mutate(treat = ifelse(user_cc == 'US', 1, 0),
-         post = ifelse(time >= treatment, 1, 0),
-         time_to_treat = as.numeric(round(difftime(time, treatment, units = 'weeks'))))
+         disbursed = ifelse(time >= disbursement, 1, 0))
 
-est_did <- outflows_volume %>%
-  filter(time_to_treat < 30 & time_to_treat > -30) %>%
-  feols(volume ~ i(time_to_treat, treat, ref = 0)|user_cc + time_to_treat)
+est_did <- df %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05'),
+         income_group %in% c("L", "LM")) %>%
+  feols(log(volume) ~ i(time, treat, ref = as.Date('2020-04-05'))|user_cc^user_cc2 + time)
 
 summary(est_did)
+
+setFixest_coefplot(xlim.add = c(0, 0), xlab = "Date", ylab = "ln(Volume)")
 
 iplot(est_did, main = "US vs. Non-US Crypto Outflows")
 
