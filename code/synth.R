@@ -9,6 +9,7 @@ library(fixest)
 library(modelsummary)
 library(synthdid)
 library(data.table)
+library(Synth)
 source('functions.R')
 
 #load matched trades
@@ -32,6 +33,9 @@ countries <- unique(outflows_by_country$user_cc)
 
 panel <- as_tibble(CJ(dates, countries)) %>% rename(time = dates, user_cc = countries)
 
+panel <- panel %>% mutate(country_number = as.numeric(factor(user_cc)),
+                          time_number = as.numeric(factor(time)))
+
 outflows_by_country_balanced <- panel %>%
   left_join(outflows_by_country, by = c('time', 'user_cc')) %>%
   replace(is.na(.), 0)
@@ -45,6 +49,21 @@ outflows_by_country_balanced <- outflows_by_country_balanced %>%
   mutate(treated = ifelse((user_cc == "US" & time > disbursement), 1, 0)) %>%
   mutate(outflow_asinh = asinh(outflow)) %>%
   filter(time < window_end)
+
+
+
+
+
+data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
+                     dependent = 'outflow',
+                     unit.variable = 'country_number',
+                     time.variable = 'time_number',
+                     treatment.identifier = 200,
+                     controls.identifier = c(1:199, 201:214),
+                     time.optimize.ssr = c(140:160),
+                     time.predictors.prior = c(140:160),
+                     unit.names.variable = c('user_cc')
+)
 
 setup = panel.matrices(as.data.frame(outflows_by_country_balanced),
                        unit = 'user_cc',
