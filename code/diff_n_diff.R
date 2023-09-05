@@ -41,7 +41,7 @@ announcement <- as.Date('2020-03-27')
 
 disbursement <- as.Date('2020-04-09')
 
-#add month, year, and post variable
+#add month, year, and post variable 
 
 us_outflows_country <- us_outflows_country %>%
   mutate(post = ifelse(time >= disbursement, 1, 0),
@@ -279,19 +279,20 @@ fb_table <- modelsummary(fb_phases,
 kableExtra::save_kable(fb_table, file = '../output/regression_tables/phases_fb.tex')
 
 
+#######################Outflows only###################
 
+outflows <- outflow_volume_origin(trades_matched, amount_usd, 'day')
 
+outflows <- outflows %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+       disbursed = ifelse(time >= disbursement, 1, 0),
+       us_outflow = ifelse(user_cc == "US", 1, 0)
+)
 
+simple_did <- outflows %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(log(volume) ~ disbursed*us_outflow|time + user_cc, cluster = 'user_cc')
 
-
-
-
-
-
-
-
-
-
+summary(simple_did)
 
 
 
