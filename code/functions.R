@@ -63,6 +63,7 @@ outflow_volume_origin <- function(data, unit, interval){
   #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
   #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
   df <- data %>%
+    filter(user_cc != user_cc2) %>%
     group_by(time = as.Date(floor_date(date, interval)),
              user_cc) %>%
     summarise(volume = sum({{unit}}))

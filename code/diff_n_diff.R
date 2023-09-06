@@ -27,7 +27,7 @@ outflows_us <- trades_matched %>%
   filter(user_cc == "US" & user_cc2 != "US")
 
 #get volume
-flows_volume <- outflow_volume_country(flows, amount_usd, 'day')
+flows_volume <- outflow_volume_country(flows, amount_usd, 'week')
 
 us_outflows_volume <- outflow_volume_country(outflows_us, amount_usd, 'day')
 
@@ -281,7 +281,14 @@ kableExtra::save_kable(fb_table, file = '../output/regression_tables/phases_fb.t
 
 #######################Outflows only###################
 
-outflows <- outflow_volume_origin(trades_matched, amount_usd, 'day')
+#add phases
+announcement <- as.Date('2020-03-27')
+
+disbursement <- as.Date('2020-04-09')
+
+outflows <- flows_volume %>%
+  group_by(user_cc, time) %>%
+  summarize(volume = sum(volume))
 
 outflows <- outflows %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
        disbursed = ifelse(time >= disbursement, 1, 0),
@@ -290,9 +297,28 @@ outflows <- outflows %>% mutate(announced = ifelse((time > announcement & time <
 
 simple_did <- outflows %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(log(volume) ~ disbursed*us_outflow|time + user_cc, cluster = 'user_cc')
+  feols(volume ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+
+baseline <- outflows %>%
+  filter(time >= as.Date('2020-01-01') & time <= disbursement,
+         user_cc == 'US') %>%
+  summarize(mean = mean(volume))
 
 summary(simple_did)
+
+outflows %>% filter(user_cc == 'US') %>%
+  ggplot(aes(y = volume, x = time)) +
+  geom_line(color = 'blue', size = 0.8)
+
+simple_es <- outflows %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
+  feols(volume ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+
+iplot(simple_es)
+
+
+
+
 
 
 
