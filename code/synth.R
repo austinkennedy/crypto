@@ -65,7 +65,9 @@ data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
                      unit.names.variable = c('user_cc')
 )
 
-setup = panel.matrices(as.data.frame(outflows_by_country_balanced),
+outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
+
+setup = panel.matrices(as.data.frame(outflows_short),
                        unit = 'user_cc',
                        time = 'time',
                        outcome = 'outflow',
@@ -73,7 +75,7 @@ setup = panel.matrices(as.data.frame(outflows_by_country_balanced),
 
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
 sprintf('point estimate: %1.2f', tau.hat)
-plot(tau.hat)
+plot(tau.hat, overlay = 1)
 
 ########TEST SYNTH DID
 

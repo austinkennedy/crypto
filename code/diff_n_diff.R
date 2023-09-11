@@ -10,6 +10,7 @@ library(fuzzyjoin)
 library(fixest)
 library(modelsummary)
 library(kableExtra)
+library(data.table)
 
 source('functions.R')
 
@@ -295,9 +296,11 @@ outflows <- outflows %>% mutate(announced = ifelse((time > announcement & time <
        us_outflow = ifelse(user_cc == "US", 1, 0)
 )
 
+outflows$volume_scaled <- outflows$volume/1000 
+
 simple_did <- outflows %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(volume ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+  feols(log(volume_scaled) ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
 
 baseline <- outflows %>%
   filter(time >= as.Date('2020-01-01') & time <= disbursement,
@@ -316,15 +319,34 @@ simple_es <- outflows %>%
 
 iplot(simple_es)
 
+####################balanced panel##########################
+
+dates <- unique(outflows$time)
+countries <- unique(outflows$user_cc)
+
+panel <- as_tibble(CJ(dates, countries)) %>% rename(time = dates, user_cc = countries)
 
 
+outflows_balanced <- panel %>%
+  left_join(outflows, by = c('time', 'user_cc')) %>%
+  replace(is.na(.), 0)
 
+outflows_balanced <- outflows_balanced %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+                                disbursed = ifelse(time >= disbursement, 1, 0),
+                                us_outflow = ifelse(user_cc == "US", 1, 0)
+)
 
+simple_did <- outflows_balanced %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(asinh(volume) ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
 
+summary(simple_did)
 
+simple_es <- outflows_balanced %>%
+  filter(time >= as.Date('2
+                         020-01-01') & time <= as.Date('2020-07-05')) %>%
+  feols(asinh(volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
 
-
-
-
+iplot(simple_es)
 
 
