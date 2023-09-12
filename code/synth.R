@@ -24,6 +24,8 @@ flows <- trades_matched %>%
 #get volume
 flows_volume <- outflow_volume_country(flows, amount_usd, 'week')
 
+flows_volume <- inner_join(flows_volume, country_data, by = c("user_cc2" = "alpha.2"))
+
 outflows_by_country <- flows_volume %>%
   group_by(user_cc, time) %>%
   summarise(outflow = sum(volume))
@@ -54,28 +56,42 @@ outflows_by_country_balanced <- outflows_by_country_balanced %>%
 
 
 
-data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
-                     dependent = 'outflow',
-                     unit.variable = 'country_number',
-                     time.variable = 'time_number',
-                     treatment.identifier = 200,
-                     controls.identifier = c(1:199, 201:214),
-                     time.optimize.ssr = c(140:160),
-                     time.predictors.prior = c(140:160),
-                     unit.names.variable = c('user_cc')
-)
+# data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
+#                      dependent = 'outflow',
+#                      unit.variable = 'country_number',
+#                      time.variable = 'time_number',
+#                      treatment.identifier = 200,
+#                      controls.identifier = c(1:199, 201:214),
+#                      time.optimize.ssr = c(140:160),
+#                      time.predictors.prior = c(140:160),
+#                      unit.names.variable = c('user_cc')
+# )
 
 outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
 
 setup = panel.matrices(as.data.frame(outflows_short),
                        unit = 'user_cc',
                        time = 'time',
-                       outcome = 'outflow',
+                       outcome = 'outflow_asinh',
                        treatment = 'treated')
 
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
+tau.sc = sc_estimate(setup$Y, setup$N0, setup$T0)
+tau.did = did_estimate(setup$Y, setup$N0, setup$T0)
 sprintf('point estimate: %1.2f', tau.hat)
-plot(tau.hat, overlay = 1)
+se = sqrt(vcov(tau.hat, method='placebo'))
+sprintf('95%% CI (%1.2f, %1.2f)', tau.hat - 1.96 * se, tau.hat + 1.96 * se)
+plot(tau.hat, overlay=0)
+plot(tau.sc)
+
+synthdid_units_plot(
+  tau.hat,
+  negligible.threshold = 0.001,
+  negligible.alpha = 0.3,
+  se.method = "jackknife",
+  units = NULL
+)
+
 
 ########TEST SYNTH DID
 

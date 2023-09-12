@@ -23,6 +23,8 @@ country_data <- read.csv('../temporary/country_data.csv')
 flows <- trades_matched %>%
   filter(user_cc != user_cc2)
 
+flows <- inner_join(flows, country_data, by = c("user_cc2" = "alpha.2"))
+
 #US outflows
 outflows_us <- trades_matched %>%
   filter(user_cc == "US" & user_cc2 != "US")
@@ -315,7 +317,7 @@ outflows %>% filter(user_cc == 'US') %>%
 
 simple_es <- outflows %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
-  feols(volume ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+  feols((volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
 
 iplot(simple_es)
 
@@ -338,15 +340,35 @@ outflows_balanced <- outflows_balanced %>% mutate(announced = ifelse((time > ann
 
 simple_did <- outflows_balanced %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(asinh(volume) ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+  feols(volume ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
 
 summary(simple_did)
 
 simple_es <- outflows_balanced %>%
-  filter(time >= as.Date('2
-                         020-01-01') & time <= as.Date('2020-07-05')) %>%
-  feols(asinh(volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
+  feols(volume ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
 
 iplot(simple_es)
+
+simple_did_asinh <- outflows_balanced %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+  feols(asinh(volume) ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+
+summary(simple_did_asinh)
+
+simple_es_asinh <- outflows_balanced %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
+  feols(asinh(volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+
+iplot(simple_es_asinh)
+
+
+
+
+
+
+
+
+
 
 
