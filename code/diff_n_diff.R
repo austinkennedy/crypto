@@ -367,17 +367,47 @@ summary(did_all_asinh)
 
 did_lm_asinh <- spillovers_model(outflows_lm, yvar = 'asinh(volume)')
 
-summary(did)
+summary(did_lm_asinh)
 
-outflows %>% filter(user_cc == 'US') %>%
-  ggplot(aes(y = volume, x = time)) +
-  geom_line(color = 'blue', size = 0.8)
+did_um_asinh <- spillovers_model(outflows_um, yvar = 'asinh(volume)')
 
-simple_es <- outflows %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
-  feols((volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+summary(did_um_asinh)
 
-iplot(simple_es)
+####EVENTSTUDY
+
+es_model <- function(df, yvar){
+    reg <- df %>%
+      filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
+      feols(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+    
+    return(reg)
+}
+
+es_all_levels <- es_model(outflows_all, yvar = 'volume')
+
+iplot(es_all_levels)
+
+es_lm_levels <- es_model(outflows_lm, yvar = 'volume')
+
+iplot(es_lm_levels)
+
+es_um_levels <- es_model(outflows_um, yvar = 'volume')
+
+iplot(es_um_levels)
+
+es_all_asinh <- es_model(outflows_all, yvar = 'asinh(volume)')
+
+iplot(es_all_asinh)
+
+es_lm_asinh <- es_model(outflows_lm, yvar = 'asinh(volume)')
+
+iplot(es_lm_asinh)
+
+es_um_asinh <- es_model(outflows_um, yvar = 'asinh(volume)')
+
+iplot(es_um_asinh) 
+
+
 
 ####################balanced panel##########################
 
