@@ -335,10 +335,13 @@ outflows_um <- outflows_um %>% mutate(announced = ifelse((time > announcement & 
                                       us_outflow = ifelse(user_cc == "US", 1, 0)
 )
 
+#CLUSTERING LEVEL
+cluster_level <- c('time')
+
 spillovers_model <- function(df, yvar){
   reg <- df %>%
     filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-    feols(.[yvar] ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+    feols(.[yvar] ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = cluster_level)
 
   return(reg)
 }
@@ -378,7 +381,7 @@ summary(did_um_asinh)
 es_model <- function(df, yvar){
     reg <- df %>%
       filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-      feols(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+      feols(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level)
     
     return(reg)
 }
@@ -405,50 +408,56 @@ iplot(es_lm_asinh)
 
 es_um_asinh <- es_model(outflows_um, yvar = 'asinh(volume)')
 
-iplot(es_um_asinh) 
+iplot(es_um_asinh)
 
 
+##########US-only outflows
 
-####################balanced panel##########################
+#add anounced and disbursed variables
 
-dates <- unique(outflows$time)
-countries <- unique(outflows$user_cc)
-
-panel <- as_tibble(CJ(dates, countries)) %>% rename(time = dates, user_cc = countries)
+us_outflows_country <- us_outflows_country %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+       disbursed = ifelse(time >= disbursement, 1, 0))
 
 
-outflows_balanced <- panel %>%
-  left_join(outflows, by = c('time', 'user_cc')) %>%
-  replace(is.na(.), 0)
+#levels
 
-outflows_balanced <- outflows_balanced %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-                                disbursed = ifelse(time >= disbursement, 1, 0),
-                                us_outflow = ifelse(user_cc == "US", 1, 0)
-)
+fb_reg_fml_levels <- as.formula('volume ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
 
-simple_did <- outflows_balanced %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(volume ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+fb_reg_all_levels <- us_outflows_country %>%
+  feols(fb_reg_fml_levels, cluster = cluster_level)
 
-summary(simple_did)
+summary(fb_reg_all_levels)
 
-simple_es <- outflows_balanced %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(volume ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+fb_reg_lm_levels <- us_outflows_country %>%
+  filter(income_group %in% c('L', 'LM')) %>%
+  feols(fb_reg_fml_levels, cluster = cluster_level)
 
-iplot(simple_es)
+summary(fb_reg_lm_levels)
 
-simple_did_asinh <- outflows_balanced %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-06-05')) %>%
-  feols(asinh(volume) ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = 'user_cc')
+fb_reg_um_levels <- us_outflows_country %>%
+  filter(income_group %in% c('UM', 'H')) %>%
+  feols(fb_reg_fml_levels, cluster = cluster_level)
 
-summary(simple_did_asinh)
+summary(fb_reg_um_levels)
 
-simple_es_asinh <- outflows_balanced %>%
-  filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05')) %>%
-  feols(asinh(volume) ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = 'user_cc')
+fb_reg_fml_asinh <- as.formula('asinh(volume) ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
 
-iplot(simple_es_asinh)
+fb_reg_all_asinh <- us_outflows_country %>%
+  feols(fb_reg_fml_asinh, cluster = cluster_level)
+
+summary(fb_reg_all_asinh)
+
+fb_reg_lm_asinh <- us_outflows_country %>%
+  filter(income_group %in% c('L', 'LM')) %>%
+  feols(fb_reg_fml_asinh, cluster = cluster_level)
+
+summary(fb_reg_lm_asinh)
+
+fb_reg_um_asinh <- us_outflows_country %>%
+  filter(income_group %in% c('UM', 'H')) %>%
+  feols(fb_reg_fml_asinh, cluster = cluster_level)
+
+summary(fb_reg_um_asinh)
 
 
 
