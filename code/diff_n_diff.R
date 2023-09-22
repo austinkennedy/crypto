@@ -11,6 +11,7 @@ library(fixest)
 library(modelsummary)
 library(kableExtra)
 library(data.table)
+library(ggiplot)
 
 source('functions.R')
 
@@ -107,7 +108,7 @@ cluster_level_spillovers <- c('user_cc')
 spillovers_model <- function(df, yvar){
   reg <- df %>%
     filter(time >= window_start & time <= window_end) %>%
-    feols(.[yvar] ~ disbursed*us_outflow + announced*us_outflow|time + user_cc, cluster = cluster_level_spillovers)
+    feols(.[yvar] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
   return(reg)
 }
@@ -184,7 +185,7 @@ iplot(es_um_asinh)
 us_outflows_country <- us_outflows_country %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
        disbursed = ifelse(time >= disbursement, 1, 0))
 
-vcov_us <- 'cluster'
+vcov_us <- 'hetero'
 #levels
 
 fb_reg_fml_levels <- as.formula('volume ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
@@ -209,7 +210,7 @@ fb_reg_um_levels <- us_outflows_country %>%
 
 summary(fb_reg_um_levels)
 
-fb_reg_fml_asinh <- as.formula('log(volume) ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2')
+fb_reg_fml_asinh <- as.formula('asinh(volume) ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
 
 fb_reg_all_asinh <- us_outflows_country %>%
   filter(time >= window_start & time <= window_end) %>%
@@ -231,12 +232,88 @@ fb_reg_um_asinh <- us_outflows_country %>%
 
 summary(fb_reg_um_asinh)
 
+#TABLES
 
+#collect models
+spillovers_levels <- list("Full Sample" = did_all_levels,
+                          "Lower and Lower-Middle Income" = did_lm_levels,
+                          "Upper-Middle and High Income" = did_um_levels)
 
+spillovers_asinh <- list("Full Sample" = did_all_asinh,
+                         "Lower and Lower-Middle Income" = did_lm_asinh,
+                         "Upper-Middle and High Income" = did_um_asinh)
 
+fb_levels <- list("Full Sample" = fb_reg_all_levels,
+                  "Lower and Lower-Middle Income" = fb_reg_lm_levels,
+                  "Upper-Middle and High Income" = fb_reg_um_levels)
 
+fb_asinh <- list("Full Sample" = fb_reg_all_asinh,
+                 "Lower and Lower-Middle Income" = fb_reg_lm_asinh,
+                 "Upper-Middle and High Income" = fb_reg_um_asinh)
 
+spillovers_map <- c('(Intercept)' = '$(\\text{Intercept})$',
+                      'disbursed' = '$\\text{disbursed}$',
+                      'us_outflow' = '$\\text{treated}$',
+                      'announced' = '$\\text{announced}$',
+                      'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{treated}$',
+                      'us_outflow:announced' = '$\\text{announced} \\times \\text{treated}$')
 
+fb_map <- c('disbursed::1:asinh(fb1)' = '$\\text{disbursed} \\times asinh(\\text{FB})$')
+
+gof_omitted <- "AIC|BIC|RMSE|Std.Errors|R2 Within"
+
+note_spillovers <- "Standard errors clustered at the country level."
+
+note_fb <- "Robust standard errors reported in parenthesis."
+
+gm_spillovers <- tribble(~raw, ~clean, ~fmt,
+                    "FE: time", "Time FE", "%.4f",
+                    "FE: user_cc2", "Receiving Country FE", "%.4f",
+                    "nobs", "$\\text{N}$", "%.0f",
+                    "r.squared", "$R^{2}$", "%.2f",
+                    "adj.r.squared", "$R^{2} Adj.$", "%.2f")
+
+spillover_models <- list('Inverse Hyperbolic Sine' = spillovers_asinh,
+                         'Levels (USD equivalent)' = spillovers_levels)
+
+fb_models <- list('Inverse Hyperbolic Sine' = fb_asinh,
+                  'Levels (USD equivalent)' = fb_levels)
+
+spillovers_table <- modelsummary(spillover_models,
+             stars = TRUE,
+             shape = 'rbind',
+             coef_map = spillovers_map,
+             gof_omit = gof_omitted,
+             gof_map = gm_spillovers,
+             title = 'Dependent Variable: Cryptocurrency Outflows',
+             escape = FALSE,
+             output = 'latex') %>%
+  add_footnote(note_spillovers, threeparttable = TRUE)
+
+show(spillovers_table)
+
+kableExtra::save_kable(spillovers_table, file = '../output/regression_tables/spillovers.tex')
+
+fb_table <- modelsummary(fb_models,
+                         stars = TRUE,
+                         shape = 'rbind',
+                         coef_map = fb_map,
+                         gof_omit = gof_omitted,
+                         gof_map = gm_spillovers,
+                         title = 'Dependent Variable: US Cryptocurrency Outflows',
+                         escape = FALSE,
+                         output = 'latex') %>%
+  add_footnote(note_fb, threeparttable = TRUE)
+
+show(fb_table)
+
+kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.tex')
+
+####EVENT STUDY GRAPHS
+
+ggiplot(es_all_levels, col = 'blue') + theme(axis.text.x = element_text(angle=45, vjust = .5))
+
+ggiplot(es_all_asinh) + theme(axis.text.x = element_text(angle=90, vjust = .5, hjust = -0.1))
 
 
 
