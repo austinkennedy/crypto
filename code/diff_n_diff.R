@@ -236,19 +236,19 @@ summary(fb_reg_um_asinh)
 
 #collect models
 spillovers_levels <- list("Full Sample" = did_all_levels,
-                          "Lower and Lower-Middle Income" = did_lm_levels,
+                          "Low and Lower-Middle Income" = did_lm_levels,
                           "Upper-Middle and High Income" = did_um_levels)
 
 spillovers_asinh <- list("Full Sample" = did_all_asinh,
-                         "Lower and Lower-Middle Income" = did_lm_asinh,
+                         "Low and Lower-Middle Income" = did_lm_asinh,
                          "Upper-Middle and High Income" = did_um_asinh)
 
 fb_levels <- list("Full Sample" = fb_reg_all_levels,
-                  "Lower and Lower-Middle Income" = fb_reg_lm_levels,
+                  "Low and Lower-Middle Income" = fb_reg_lm_levels,
                   "Upper-Middle and High Income" = fb_reg_um_levels)
 
 fb_asinh <- list("Full Sample" = fb_reg_all_asinh,
-                 "Lower and Lower-Middle Income" = fb_reg_lm_asinh,
+                 "Low and Lower-Middle Income" = fb_reg_lm_asinh,
                  "Upper-Middle and High Income" = fb_reg_um_asinh)
 
 spillovers_map <- c('(Intercept)' = '$(\\text{Intercept})$',
@@ -311,11 +311,29 @@ kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.te
 
 ####EVENT STUDY GRAPHS
 
-ggiplot(es_all_levels, col = 'blue') + theme(axis.text.x = element_text(angle=45, vjust = .5))
+ggiplot(es_all_levels, col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'Volume (USD)', main = 'Levels') + theme(axis.text.x = element_text(angle=90, vjust = .5))
 
-ggiplot(es_all_asinh) + theme(axis.text.x = element_text(angle=90, vjust = .5, hjust = -0.1))
+ggsave('../output/event_study_plots/es_all_levels.png')
 
+ggiplot(es_all_asinh, col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'asinh(Volume)', main = 'Inverse Hyperbolic Sine') + theme(axis.text.x = element_text(angle=90, vjust = .5))
 
+ggsave('../output/event_study_plots/es_all_asinh.png')
+
+es_levels <- list("Full Sample" = es_all_levels,
+                  "Low and Lower-Middle Income" = es_lm_levels,
+                  "Upper-Middle and High Income" = es_um_levels)
+
+ggiplot(es_levels, geom_style = "errorbar", ylab = "Volume (USD)", main = "Levels") + theme(axis.text.x = element_text(angle = 90, vjust = .5))
+
+ggsave('../output/event_study_plots/es_levels.png')
+
+es_asinh <- list("Full Sample" = es_all_asinh,
+                 "Low and Lower-Middle Income" = es_lm_asinh,
+                 "Upper-Middle and High Income" = es_um_asinh)
+
+ggiplot(es_asinh, geom_style = 'errorbar', ylab = "asinh(Volume)", main = "Inverse Hyperbolic Sine") + theme(axis.text.x = element_text(angle = 90, vjust = .5))
+
+ggsave('../output/event_study_plots/es_asinh.png')
 
 
 
