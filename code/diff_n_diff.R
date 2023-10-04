@@ -15,10 +15,28 @@ library(ggiplot)
 
 source('functions.R')
 
+####OPTIONS
+
+#trade aggregation level, should be 'day' or 'week'
+agg_level <- 'week'
+
+#add phases
+announcement <- as.Date('2020-03-27')
+
+disbursement <- as.Date('2020-04-09')
+
+window_start <- as.Date('2020-01-01')
+window_end <- as.Date('2020-06-07')
+
+
 #load matched trades
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 country_data <- read.csv('../temporary/country_data.csv')
+
+#exclude other countries that have stimulus
+country_data <- country_data %>%
+  filter(!alpha.2 %in% c('JP', 'KR', 'SG'))
 
 #overall outflows
 flows <- trades_matched %>%
@@ -31,19 +49,14 @@ outflows_us <- trades_matched %>%
   filter(user_cc == "US" & user_cc2 != "US")
 
 #get volume
-flows_volume <- outflow_volume_country(flows, amount_usd, 'week')
+flows_volume <- outflow_volume_country(flows, amount_usd, agg_level)
 
-us_outflows_volume <- outflow_volume_country(outflows_us, amount_usd, 'day')
+us_outflows_volume <- outflow_volume_country(outflows_us, amount_usd, agg_level)
 
 #join crypto and country data
 us_outflows_country <- inner_join(us_outflows_volume, country_data, by = c("user_cc2" = "alpha.2"))
 
 flows_country <- inner_join(flows_volume, country_data, by = c("user_cc2" = "alpha.2"))
-
-#add phases
-announcement <- as.Date('2020-03-27')
-
-disbursement <- as.Date('2020-04-09')
 
 
 #######################Outflows only###################
@@ -51,9 +64,6 @@ disbursement <- as.Date('2020-04-09')
 #make balanced
 dates <- unique(flows_country$time)
 countries <- unique(flows_country$user_cc)
-
-window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-06-07')
 
 panel <- as_tibble(CJ(dates, countries)) %>% rename(time = dates, user_cc = countries)
 
@@ -180,55 +190,46 @@ iplot(es_um_asinh)
 
 ##########US-only outflows
 
-#add anounced and disbursed variables
+#add announced and disbursed variables
 
 us_outflows_country <- us_outflows_country %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
        disbursed = ifelse(time >= disbursement, 1, 0))
 
-vcov_us <- 'hetero'
-#levels
+#Create lm and um datasets
 
-fb_reg_fml_levels <- as.formula('volume ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
+us_outflows_lm <- us_outflows_country %>% filter(income_group %in% c('L', 'LM'))
 
-fb_reg_all_levels <- us_outflows_country %>%
-  filter(time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_levels, vcov = vcov_us)
+us_outflows_um <- us_outflows_country %>% filter(income_group %in% c('UM', 'H'))
+
+fb_model <- function(df, yvar){
+  reg <- df %>%
+    filter(time >= window_start & time <= window_end) %>%
+    feols(.[yvar] ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2,
+                      cluster = c('user_cc2'))
+  
+}
+
+fb_reg_all_levels <- fb_model(us_outflows_country, yvar = 'volume')
 
 summary(fb_reg_all_levels)
 
-fb_reg_lm_levels <- us_outflows_country %>%
-  filter(income_group %in% c('L', 'LM'),
-         time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_levels, vcov = vcov_us)
+fb_reg_lm_levels <- fb_model(us_outflows_lm, yvar = 'volume')
 
 summary(fb_reg_lm_levels)
 
-fb_reg_um_levels <- us_outflows_country %>%
-  filter(income_group %in% c('UM', 'H'),
-         time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_levels, vcov = vcov_us)
+fb_reg_um_levels <- fb_model(us_outflows_um, yvar = 'volume')
 
 summary(fb_reg_um_levels)
 
-fb_reg_fml_asinh <- as.formula('asinh(volume) ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2')
-
-fb_reg_all_asinh <- us_outflows_country %>%
-  filter(time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_asinh, vcov = vcov_us)
+fb_reg_all_asinh <- fb_model(us_outflows_country, yvar = 'asinh(volume)')
 
 summary(fb_reg_all_asinh)
 
-fb_reg_lm_asinh <- us_outflows_country %>%
-  filter(income_group %in% c('L', 'LM'),
-         time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_asinh, vcov = vcov_us)
+fb_reg_lm_asinh <- fb_model(us_outflows_lm, yvar = 'asinh(volume)')
 
 summary(fb_reg_lm_asinh)
 
-fb_reg_um_asinh <- us_outflows_country %>%
-  filter(income_group %in% c('UM', 'H'),
-         time >= window_start & time <= window_end) %>%
-  feols(fb_reg_fml_asinh, vcov = vcov_us)
+fb_reg_um_asinh <- fb_model(us_outflows_um, yvar = 'asinh(volume)')
 
 summary(fb_reg_um_asinh)
 
@@ -252,11 +253,12 @@ fb_asinh <- list("Full Sample" = fb_reg_all_asinh,
                  "Upper-Middle and High Income" = fb_reg_um_asinh)
 
 spillovers_map <- c('(Intercept)' = '$(\\text{Intercept})$',
-                      'disbursed' = '$\\text{disbursed}$',
-                      'us_outflow' = '$\\text{treated}$',
+                      'us_outflow' = '$\\text{US}$',
                       'announced' = '$\\text{announced}$',
-                      'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{treated}$',
-                      'us_outflow:announced' = '$\\text{announced} \\times \\text{treated}$')
+                      'disbursed' = '$\\text{disbursed}$',
+                      'us_outflow:announced' = '$\\text{announced} \\times \\text{US}$',
+                      'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$'
+                      )
 
 fb_map <- c('disbursed::1:asinh(fb1)' = '$\\text{disbursed} \\times asinh(\\text{FB})$')
 
@@ -309,6 +311,33 @@ show(fb_table)
 
 kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.tex')
 
+#####Table with no panels
+#spillovers
+
+spillovers_models_no_panel <- list('Levels (USD)' = did_all_levels,
+                                   'Inverse Hyperbolic Sine' = did_all_asinh,
+                                   'Levels (USD)' = did_lm_levels,
+                                   'Inverse Hyperbolic Sine' = did_lm_asinh,
+                                   'Levels (USD)' = did_um_levels,
+                                   'Inverse Hyperbolic Sine' = did_um_asinh)
+
+spillovers_table_no_panel <- modelsummary(spillovers_models_no_panel,
+                                          stars = TRUE,
+                                          coef_map = spillovers_map,
+                                          gof_moit = gof_omitted,
+                                          gof_map = gm_spillovers,
+                                          title = "Dependent Variable: Cryptocurrency Outflows",
+                                          escape = FALSE,
+                                          output = 'latex') %>%
+  add_header_above(c(" " = 1, "Full Sample" = 2, "Low and Lower-Middle Income" = 2, "Upper-Middle and High Income" = 2)) %>%
+  add_footnote(note_spillovers, threeparttable = TRUE)
+
+show(spillovers_table_no_panel)
+
+kableExtra::save_kable(spillovers_table_no_panel, file = '../output/regression_tables/spillovers_no_panel.tex')
+
+#foreign-born
+
 ####EVENT STUDY GRAPHS
 
 ggiplot(es_all_levels, col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'Volume (USD)', main = 'Levels') + theme(axis.text.x = element_text(angle=90, vjust = .5))
@@ -332,7 +361,7 @@ es_asinh <- list("Full Sample" = es_all_asinh,
                  "Upper-Middle and High Income" = es_um_asinh)
 
 ggiplot(es_asinh, geom_style = 'errorbar', ylab = "asinh(Volume)", main = "Inverse Hyperbolic Sine") + theme(axis.text.x = element_text(angle = 90, vjust = .5))
-
+ 
 ggsave('../output/event_study_plots/es_asinh.png')
 
 
