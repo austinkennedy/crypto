@@ -364,6 +364,18 @@ ggiplot(es_asinh, geom_style = 'errorbar', ylab = "asinh(Volume)", main = "Inver
  
 ggsave('../output/event_study_plots/es_asinh.png')
 
+####Show flows with US vs. Non-US
+
+global_flows <- outflows_all %>% filter(user_cc != 'US') %>% group_by(time) %>% summarize(volume = sum(volume))
+global_flows$user_cc = 'Non-US'
+us_flows <- outflows_all %>% filter(user_cc == 'US') %>% select(user_cc, volume, time)
+
+outflows_us_non_us <- rbind(global_flows, us_flows)
+
+outflows_us_non_us %>% filter(time >= window_start & time <= '2020-09-01') %>% ggplot(aes(x = time, y = volume, color = user_cc)) + geom_line(size = 1) + theme_bw() + ggtitle("Cryptocurrency Outflows") + theme(plot.title = element_text(size = 15, hjust = 0.5)) + labs(color = 'Legend')
+
+ggsave('../output/figures_paxful/global_flows.png')
+
 
 
 

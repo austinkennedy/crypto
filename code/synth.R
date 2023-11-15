@@ -26,6 +26,19 @@ flows_volume <- outflow_volume_country(flows, amount_usd, 'week')
 
 flows_volume <- inner_join(flows_volume, country_data, by = c("user_cc2" = "alpha.2"))
 
+#baseline (2019 for now) outflows by receiving country
+
+flows_volume_yearly <- outflow_volume_country(flows, amount_usd, 'year')
+
+#get yearly shares
+flows_shares_yearly <- flows_volume_yearly %>%
+  group_by(time, user_cc) %>%
+  mutate(share = volume/sum(volume))
+
+flows_shares_yearly <- flows_shares_yearly %>% select(-c(volume))
+
+flows_shares_yearly <- flows_shares_yearly %>% pivot_wider(names_from = user_cc2, values_from = share)
+
 outflows_by_country <- flows_volume %>%
   group_by(user_cc, time) %>%
   summarise(outflow = sum(volume))
