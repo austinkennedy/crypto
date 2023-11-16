@@ -39,6 +39,10 @@ flows_shares_yearly <- flows_shares_yearly %>% select(-c(volume))
 
 flows_shares_yearly <- flows_shares_yearly %>% pivot_wider(names_from = user_cc2, values_from = share)
 
+shares_2019 <- flows_shares_yearly %>% filter(time == '2019-01-01') %>% ungroup() %>% select(-c(time))
+
+shares_2019 <- shares_2019 %>% select(where(~ any(.!= 0)))
+
 outflows_by_country <- flows_volume %>%
   group_by(user_cc, time) %>%
   summarise(outflow = sum(volume))
@@ -65,20 +69,34 @@ outflows_by_country_balanced <- outflows_by_country_balanced %>%
   mutate(outflow_asinh = asinh(outflow)) %>%
   filter(time < window_end)
 
+outflows_by_country_balanced <- outflows_by_country_balanced %>% left_join(shares_2019, by = 'user_cc')
 
 
+outflows_by_country_balanced[is.na(outflows_by_country_balanced)] <- 0
+
+predictor_names <- shares_2019 %>% select(NG:BD) %>% colnames()
 
 
-# data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
-#                      dependent = 'outflow',
-#                      unit.variable = 'country_number',
-#                      time.variable = 'time_number',
-#                      treatment.identifier = 200,
-#                      controls.identifier = c(1:199, 201:214),
-#                      time.optimize.ssr = c(140:160),
-#                      time.predictors.prior = c(140:160),
-#                      unit.names.variable = c('user_cc')
-# )
+data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
+                     dependent = 'outflow_asinh',
+                     unit.variable = 'country_number',
+                     time.variable = 'time_number',
+                     treatment.identifier = 199,
+                     controls.identifier = c(1:198, 200:213),
+                     time.optimize.ssr = c(140:160),
+                     time.predictors.prior = c(140:160),
+                     unit.names.variable = c('user_cc'),
+                     predictors = predictor_names,
+                     time.plot = 140:180
+)
+
+synth_out <- synth(data_scm)
+
+path.plot(synth.res = synth_out,
+          dataprep.res = data_scm)
+
+gaps.plot(synth.res = synth_out,
+          dataprep.res = data_scm)
 
 outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
 
