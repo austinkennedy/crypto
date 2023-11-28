@@ -41,6 +41,8 @@ flows_shares_yearly <- flows_shares_yearly %>% pivot_wider(names_from = user_cc2
 
 shares_2019 <- flows_shares_yearly %>% filter(time == '2019-01-01') %>% ungroup() %>% select(-c(time))
 
+shares_2019[is.na(shares_2019)] <- 0
+
 shares_2019 <- shares_2019 %>% select(where(~ any(.!= 0)))
 
 outflows_by_country <- flows_volume %>%
@@ -74,6 +76,8 @@ outflows_by_country_balanced <- outflows_by_country_balanced %>% left_join(share
 
 outflows_by_country_balanced[is.na(outflows_by_country_balanced)] <- 0
 
+##Synthetic Control
+
 predictor_names <- shares_2019 %>% select(NG:BD) %>% colnames()
 
 
@@ -93,12 +97,35 @@ data_scm <- dataprep(foo = as.data.frame(outflows_by_country_balanced),
 synth_out <- synth(data_scm)
 
 path.plot(synth.res = synth_out,
-          dataprep.res = data_scm)
+          dataprep.res = data_scm,
+          tr.intake = 161)
 
 gaps.plot(synth.res = synth_out,
           dataprep.res = data_scm)
 
-outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
+###Synthetic DID
+
+# outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
+
+#Create X matrix
+
+flows_volume_weekly <- outflow_volume_country(flows, amount_usd, 'week')
+
+#get share of outflows to each country, by week
+flows_shares_weekly <- flows_volume_weekly %>%
+  group_by(time, user_cc) %>%
+  mutate(share = volume/sum(volume)) %>%
+  select(-c(volume)) %>%
+  pivot_wider(names_from = user_cc2, values_from = share)
+
+flows_shares_weekly[is.na(flows_shares_weekly)] <- 0
+
+flows_shares_weekly_balanced <- panel %>%
+  left_join(flows_shares_weekly, by = c('time', 'user_cc')) %>%
+  select(-c(country_number, time_number)) %>%
+  replace(is.na(.), 0)
+
+
 
 setup = panel.matrices(as.data.frame(outflows_short),
                        unit = 'user_cc',
@@ -129,6 +156,12 @@ synthdid_units_plot(
 data('california_prop99')
 
 data <- as_tibble(california_prop99)
+
+data <- 
+  data.table(california_prop99) %>% 
+  .[, x1 := 100 * runif(nrow(.))] %>% 
+  .[, x2 := runif(nrow(.))]
+
 setup = panel.matrices(california_prop99)
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
 se = sqrt(vcov(tau.hat, method='placebo'))
