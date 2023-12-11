@@ -11,6 +11,8 @@ library(synthdid)
 library(data.table)
 library(Synth)
 source('functions.R')
+library(data.table)
+library(abind)
 
 #load matched trades
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
@@ -105,9 +107,12 @@ gaps.plot(synth.res = synth_out,
 
 ###Synthetic DID
 
-# outflows_short <- outflows_by_country_balanced %>% filter(time >= as.Date('2020-01-01') & time <= as.Date('2020-07-05'))
+window_start <- as.Date('2019-01-01')
+window_end <- as.Date('2020-07-05')
 
-#Create X matrix
+outflows_short <- outflows_by_country_balanced %>% filter(time >= window_start & time <= window_end )
+
+#Get week by receiving country flows
 
 flows_volume_weekly <- outflow_volume_country(flows, amount_usd, 'week')
 
@@ -123,15 +128,33 @@ flows_shares_weekly[is.na(flows_shares_weekly)] <- 0
 flows_shares_weekly_balanced <- panel %>%
   left_join(flows_shares_weekly, by = c('time', 'user_cc')) %>%
   select(-c(country_number, time_number)) %>%
-  replace(is.na(.), 0)
+  replace(is.na(.), 0) %>%
+  filter(time >= window_start & time <= window_end)
 
 
-
+#Synthdid setup
 setup = panel.matrices(as.data.frame(outflows_short),
                        unit = 'user_cc',
                        time = 'time',
                        outcome = 'outflow_asinh',
                        treatment = 'treated')
+
+#Create X matrix
+
+flows_shares_weekly_balanced <- as.data.table(flows_shares_weekly_balanced)
+
+X <- flows_shares_weekly_balanced %>%
+  melt(id.var = c('user_cc', 'time')) %>%
+  nest_by(variable) %>%
+  mutate(X = list(
+    dcast(data.table(flows_shares_weekly_balanced), user_cc ~ time, value.var = 'value') %>%
+      .[data.table(id = as.numeric(rownames(sdid_setup$Y))), on = 'user_cc'] %>%
+      .[, id := NULL] %>%
+      as.matrix()
+  )) %>%
+  .$X %>%
+  abind(along=3)
+  
 
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
 tau.sc = sc_estimate(setup$Y, setup$N0, setup$T0)
@@ -168,3 +191,50 @@ se = sqrt(vcov(tau.hat, method='placebo'))
 sprintf('point estimate: %1.2f', tau.hat)
 sprintf('95%% CI (%1.2f, %1.2f)', tau.hat - 1.96 * se, tau.hat + 1.96 * se)
 plot(tau.hat)
+
+N <- 100
+T <- 10
+
+data <- 
+  expand.grid(
+    id = 1:N,
+    year = 1:T
+  ) %>% 
+  data.table() %>% 
+  .[, trt_or_ctrl := ifelse(id <= (N / 2), "treatment", "control")] %>% 
+  .[, treated := ifelse(trt_or_ctrl == "treatment" & year > (T - 5), 1, 0)] %>% 
+  .[, `:=`(
+    X_1 = rnorm(nrow(.)),
+    X_2 = rnorm(nrow(.))
+  )] %>%  
+  .[, y := 1 + 1 * treated + rnorm(nrow(.)) + 1 * X_1 + 1 * X_2] 
+
+sdid_setup <- 
+  synthdid::panel.matrices(
+    data[, .(id, year, y, treated)],
+    unit = 1,
+    time = 2,
+    outcome = 3,
+    treatment = 4
+  )
+
+#/*----------------------------------*/
+#' ## Construct X 
+#/*----------------------------------*/
+X_mat <- 
+  data[, .(id, year, X_1, X_2)] %>% 
+  melt(id.var = c("id", "year")) %>% 
+  #=== dataset by variable ===#
+  nest_by(variable) %>% 
+  mutate(X = list(
+    dcast(data.table(data), id ~ year, value.var = "value") %>% 
+      #=== order the observations to match that of sdid_setup$Y ===#
+      .[data.table(id = as.numeric(rownames(sdid_setup$Y))), on = "id"] %>% 
+      .[, id := NULL] %>% 
+      as.matrix() 
+  )) %>% 
+  .$X %>% 
+  #=== list of matrices to 3-D array of N * T * C ===#
+  # C: number of covariates
+  abind(along = 3) 
+
