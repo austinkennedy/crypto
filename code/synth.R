@@ -143,26 +143,23 @@ setup = panel.matrices(as.data.frame(outflows_short),
 
 flows_shares_weekly_balanced <- as.data.table(flows_shares_weekly_balanced)
 
-X <- flows_shares_weekly_balanced %>%
+X_matrix <- flows_shares_weekly_balanced[, .(user_cc, time, NG, US, ZA)] %>%
   melt(id.var = c('user_cc', 'time')) %>%
   nest_by(variable) %>%
   mutate(X = list(
-    dcast(data.table(flows_shares_weekly_balanced), user_cc ~ time, value.var = 'value') %>%
-      .[data.table(id = as.numeric(rownames(sdid_setup$Y))), on = 'user_cc'] %>%
-      .[, id := NULL] %>%
+    dcast(data.table(data), user_cc ~ time, value.var = 'value') %>%
+      .[data.table(user_cc = rownames(setup$Y)), on = 'user_cc'] %>%
+      .[, user_cc := NULL] %>%
       as.matrix()
   )) %>%
   .$X %>%
   abind(along=3)
   
 
-tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
+tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0, X = X_matrix)
 tau.sc = sc_estimate(setup$Y, setup$N0, setup$T0)
 tau.did = did_estimate(setup$Y, setup$N0, setup$T0)
-sprintf('point estimate: %1.2f', tau.hat)
-se = sqrt(vcov(tau.hat, method='placebo'))
-sprintf('95%% CI (%1.2f, %1.2f)', tau.hat - 1.96 * se, tau.hat + 1.96 * se)
-plot(tau.hat, overlay=0)
+ 
 plot(tau.sc)
 
 synthdid_units_plot(
@@ -195,7 +192,7 @@ plot(tau.hat)
 N <- 100
 T <- 10
 
-data <- 
+data_test <- 
   expand.grid(
     id = 1:N,
     year = 1:T
@@ -211,7 +208,7 @@ data <-
 
 sdid_setup <- 
   synthdid::panel.matrices(
-    data[, .(id, year, y, treated)],
+    data_test[, .(id, year, y, treated)],
     unit = 1,
     time = 2,
     outcome = 3,
@@ -222,7 +219,7 @@ sdid_setup <-
 #' ## Construct X 
 #/*----------------------------------*/
 X_mat <- 
-  data[, .(id, year, X_1, X_2)] %>% 
+  data_test[, .(id, year, X_1, X_2)] %>% 
   melt(id.var = c("id", "year")) %>% 
   #=== dataset by variable ===#
   nest_by(variable) %>% 
