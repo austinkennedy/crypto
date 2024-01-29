@@ -69,6 +69,37 @@ outflow_volume_origin <- function(data, unit, interval){
     summarise(volume = sum({{unit}}))
 }
 
+getFlows <- function(data, unit, interval){
+  #get volume at different intervals, by receiving country
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval)),
+             user_cc,
+             user_cc2) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}
+
+balanceFlows <- function(data){
+  dates <- unique(data$time)
+  origins <- unique(data$user_cc)
+  destinations <- unique(data$user_cc2)
+  
+  panel <- as_tibble(CJ(dates, origins, destinations)) %>% rename(time = dates, user_cc = origins, user_cc2 = destinations)
+  
+  # panel <- panel %>% mutate(country_number = as.numeric(factor(user_cc)),
+  #                           time_number = as.numeric(factor(time)))
+  
+  df <- panel %>%
+    left_join(data, by = c('time', 'user_cc', 'user_cc2')) %>%
+    replace(is.na(.), 0)
+
+  return(df)
+}
+
 trade_count <- function(data, interval){
   #Get number of trades over intervals
   #'data' should be a df of matched or unmatched crypto trades
