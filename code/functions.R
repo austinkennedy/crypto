@@ -112,6 +112,29 @@ trade_count <- function(data, interval){
   return(df)
 }
 
+getVolume <- function(data, unit, interval){
+  #get volume at different intervals
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval))) %>%
+    summarise(volume = sum({{unit}}))
+  
+  return(df)
+}
+
+getVolumePrice <- function(data, unit, interval){
+  #get volume at different intervals
+  #'data' should be a dataframe of matched or unmatched crypto trades
+  #'unit' indicates the desired currency, right now either "amount" (BTC) or "amount_usd" (USD)
+  #'interval' indicates the desired interval. Provide a string such as "day", "week", "month", etc
+  df <- data %>%
+    group_by(time = as.Date(floor_date(date, interval))) %>%
+    summarise(volume = sum({{unit}}), price = mean(crypto_rate_usd))
+  
+  return(df)
+}
 
 
 
