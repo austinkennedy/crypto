@@ -38,15 +38,15 @@ stimulus_graph <- outflows %>%
         plot.margin = unit(c(1,1,1,1), "cm"))
 
 show(stimulus_graph)
-ggsave('../output/figures_paxful/stimulus_timing.png', plot = stimulus_graph)
+ggsave('../output/figures_paxful/stimulus_timing.png', plot = stimulus_graph, width = 9, height = 6, dpi = 300)
 
 ####Paxful volume w/ price
 volume_price <- getVolumePrice(trades, amount_usd, 'week')
 
 paxful_volume_price <- volume_price %>%
   ggplot(., aes(x = time)) +
-  geom_line(aes(y = volume, color = "Volume"), size=0.6) +
-  geom_line(aes(y = price*1200, color = 'Bitcoin Price'), size=0.6, linetype='twodash') +
+  geom_line(aes(y = volume, color = "Volume", linetype = 'Volume'), size=0.6) +
+  geom_line(aes(y = price*1200, color = 'Bitcoin Price', linetype='Bitcoin Price'), size=0.6) +
   xlab("") +
   ylab("Volume (USD)") +
   theme_bw() +
@@ -58,6 +58,10 @@ paxful_volume_price <- volume_price %>%
     'Volume' = 'blue',
     'Bitcoin Price' = 'red'
   )) +
+  scale_linetype_manual(name = 'Legend', values = c(
+    'Volume' = 1,
+    'Bitcoin Price' = 2
+  )) +
   theme(plot.title = element_text(size = 15, hjust = 0.5),
         legend.position = c(0.15,0.85),
         legend.background = element_rect(fill = "white",
@@ -66,7 +70,7 @@ paxful_volume_price <- volume_price %>%
                                          color = 'black'))
 
 show(paxful_volume_price)
-ggsave('../output/figures_paxful/paxful_volume_price.png', plot = paxful_volume_price)
+ggsave('../output/figures_paxful/paxful_volume_price.png', plot = paxful_volume_price, width = 9, height = 6, dpi = 300)
 
 #Descriptive_stats
 unmatched_stats <- list()
