@@ -93,9 +93,31 @@ stats <- do.call(rbind, Map(data.frame, All = unmatched_stats, Matched = matched
 stats <- as_tibble(cbind(unmatched_stats, matched_stats), rownames = NA) %>%
   rownames_to_column()
 
+stats$unmatched_stats <- as.numeric(stats$unmatched_stats)
+stats$matched_stats <- as.numeric(stats$matched_stats)
+
+
+
 gt(stats)
 
+row_target <- c(2,3)
 
+tbl <- as_tibble(stats) |>
+  gt() |>
+  tab_header(
+    title = "Summary Statistics"
+  ) |>
+  fmt_currency(
+    currency = "USD",
+    decimals = 2,
+    rows = row_target
+  ) |>
+  cols_label(
+    unmatched_stats = "All Trades",
+    matched_stats = "Matched"
+  )
+
+tbl
 
 
 
