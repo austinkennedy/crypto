@@ -112,13 +112,45 @@ tbl <- as_tibble(stats) |>
     decimals = 2,
     rows = row_target
   ) |>
+  fmt_currency(
+    rows = 4,
+    currency = "USD",
+    decimals = 1,
+    suffixing = TRUE
+  ) |>
+  fmt_number(
+    rows = 1,
+    use_seps = TRUE,
+    decimals = 0
+  ) |>
   cols_label(
     unmatched_stats = "All Trades",
     matched_stats = "Matched"
-  )
+  ) |>
+  as_latex()
 
-tbl
+as.character(tbl)
 
+####Chart top importers/exporters
+
+total_inflows <- flows %>%
+  group_by(user_cc2) %>%
+  summarize(total = sum(volume)) %>%
+  ungroup() %>%
+  mutate(share = total/sum(total))
+
+total_outflows <- flows %>%
+  group_by(user_cc) %>%
+  summarize(total = sum(volume)) %>%
+  ungroup() %>%
+  mutate(share = total/sum(total))
+
+total_combined_flows <- flows %>%
+  filter(user_cc != user_cc2) %>%
+  group_by(user_cc, user_cc2) %>%
+  summarize(total = sum(volume)) %>%
+  ungroup() %>%
+  mutate(share = total/sum(total))
 
 
 
