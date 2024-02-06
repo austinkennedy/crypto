@@ -98,8 +98,6 @@ stats$matched_stats <- as.numeric(stats$matched_stats)
 
 
 
-gt(stats)
-
 row_target <- c(2,3)
 
 tbl <- as_tibble(stats) |>
@@ -126,10 +124,13 @@ tbl <- as_tibble(stats) |>
   cols_label(
     unmatched_stats = "All Trades",
     matched_stats = "Matched"
-  ) |>
-  as_latex()
+  )
+
+tbl |> gtsave('../output/summary_stats.tex')
 
 as.character(tbl)
+
+
 
 ####Chart top importers/exporters
 
