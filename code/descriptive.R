@@ -12,6 +12,8 @@ trades <- vroom('../temporary/trades_paxful_cleaned.csv')
 matched_trades <- vroom('../temporary/matched_paxful_trades.csv')
 flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
+country_data <- read.csv('../temporary/country_data.csv')
+
 
 
 
@@ -138,20 +140,37 @@ total_inflows <- flows %>%
   group_by(user_cc2) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
-  mutate(share = total/sum(total))
+  mutate(share = total/sum(total)) %>%
+  inner_join(country_data, by = c("user_cc2" = "alpha.2"))
 
 total_outflows <- flows %>%
   group_by(user_cc) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
-  mutate(share = total/sum(total))
+  mutate(share = total/sum(total)) %>%
+  left_join(country_data, by = c("user_cc" = "alpha.2"))
 
 total_combined_flows <- flows %>%
   filter(user_cc != user_cc2) %>%
-  group_by(user_cc, user_cc2) %>%
+  group_by(user_cc, user_cc2) %>%b
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total))
+
+#####graphs
+inflows_graph <- total_inflows %>%
+  slice_max(share, n = 10) %>%
+  ggplot(aes(x= reorder(label, share), y = share)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_bw()
+
+show(inflows_graph)
+
+
+
+
+
 
 
 
