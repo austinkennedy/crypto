@@ -14,6 +14,9 @@ flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
+country_data <- country_data %>%
+  add_row(alpha.2 = "US", label = "United States")
+
 
 
 
@@ -148,24 +151,55 @@ total_outflows <- flows %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  left_join(country_data, by = c("user_cc" = "alpha.2"))
+  inner_join(country_data, by = c("user_cc" = "alpha.2"))
 
 total_combined_flows <- flows %>%
   filter(user_cc != user_cc2) %>%
-  group_by(user_cc, user_cc2) %>%b
+  group_by(user_cc, user_cc2) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total))
 
+total_combined_flows <- flows %>%
+  filter(user_cc != user_cc2) %>%
+  group_by(user_cc, user_cc2) %>%
+  summarize(total = sum(volume)) %>%
+  ungroup() %>%
+  inner_join(., ., by = c("user_cc" = "user_cc2", "user_cc2" = "user_cc")) %>%
+  mutate(combined = total.x + total.y) %>%
+  distinct(combined, .keep_all=TRUE) %>%
+  mutate(share = combined/sum(combined)) %>%
+  left_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  left_join(country_data[, c('alpha.2', 'label')], by = c("user_cc2" = "alpha.2")) %>%
+  mutate(combined_name = paste(label.x, label.y, sep = " - "))
+
 #####graphs
+
+##inflows
 inflows_graph <- total_inflows %>%
   slice_max(share, n = 10) %>%
   ggplot(aes(x= reorder(label, share), y = share)) +
-  geom_bar(stat = "identity") +
+  geom_bar(stat = "identity", fill = "blue3") +
   coord_flip() +
-  theme_bw()
+  theme_bw() +
+  ggtitle("Top Receivers") +
+  xlab("") +
+  ylab("Share of Global Inflows")
 
 show(inflows_graph)
+
+#outflows
+outflows_graph <- total_outflows %>%
+  slice_max(share, n = 10) %>%
+  ggplot(aes(x= reorder(label, share), y = share)) +
+  geom_bar(stat = "identity", fill = "red3") +
+  coord_flip() +
+  theme_bw() +
+  ggtitle("Top Senders") +
+  xlab("") +
+  ylab("Share of Global Outflows")
+
+show(outflows_graph)
 
 
 
