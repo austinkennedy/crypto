@@ -12,6 +12,7 @@ source('functions.R')
 #global options
 baseline <- '2019-01-01'
 
+trades <- vroom('../temporary/trades_paxful_cleaned.csv')
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
@@ -53,7 +54,14 @@ shares_wide <- shares_baseline %>%
 
 outflows_sdid <- outflows_sdid %>% left_join(shares_wide, by = 'user_cc')
 
+##########Total Volume By Country
+
+total_volume <- trades %>%
+  group_by(user_cc) %>%
+  summarize(total = sum(amount_usd))
+
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
 write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)
+write.csv(total_volume, '../temporary/total_volume_by_country.csv', row.names = FALSE)

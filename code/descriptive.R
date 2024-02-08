@@ -10,9 +10,11 @@ source('functions.R')
 
 trades <- vroom('../temporary/trades_paxful_cleaned.csv')
 matched_trades <- vroom('../temporary/matched_paxful_trades.csv')
+total_volume <- vroom('../temporary/total_volume_by_country.csv')
 flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
+
 
 country_data <- country_data %>%
   add_row(alpha.2 = "US", label = "United States")
@@ -140,27 +142,40 @@ as.character(tbl)
 ####Chart top importers/exporters
 
 total_inflows <- flows %>%
+  filter(user_cc != user_cc2) %>%
   group_by(user_cc2) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  inner_join(country_data, by = c("user_cc2" = "alpha.2"))
+  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc2" = "alpha.2")) %>%
+  rename(code = user_cc2)
 
 total_outflows <- flows %>%
+  filter(user_cc != user_cc2) %>%
   group_by(user_cc) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  inner_join(country_data, by = c("user_cc" = "alpha.2"))
+  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  rename(code = user_cc)
 
-total_combined_flows <- flows %>%
-  filter(user_cc != user_cc2) %>%
-  group_by(user_cc, user_cc2) %>%
+total_domestic <- flows %>%
+  filter(user_cc == user_cc2) %>%
+  group_by(user_cc) %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
-  mutate(share = total/sum(total))
+  mutate(share = total/sum(total)) %>%
+  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  rename(code = user_cc)
 
-total_combined_flows <- flows %>%
+total_combined_flows <- inner_join(total_inflows[, c("code", "total")], total_outflows[, c("code", "total")], by = "code", suffix = c("_inflows", "_outflows")) %>%
+  inner_join(total_domestic[, c("code", "total")], by = "code") %>%
+  rename(domestic = total) %>%
+  inner_join(total_volume, by = c("code" = "user_cc")) %>%
+  mutate(non_vehicle = total - domestic - total_inflows - total_outflows) %>%
+  inner_join(country_data[, c("alpha.2", "label")], by = c("code" = "alpha.2"))
+
+country_pair_flows <- flows %>%
   filter(user_cc != user_cc2) %>%
   group_by(user_cc, user_cc2) %>%
   summarize(total = sum(volume)) %>%
@@ -202,7 +217,32 @@ outflows_graph <- total_outflows %>%
 show(outflows_graph)
 
 
+#total flows, broken up by inflows/outflows
+total_flows_graph <- total_combined_flows %>%
+  slice_max(total, n = 10) %>%
+  # select(-non_vehicle) %>%
+  pivot_longer(cols = !c(code,label, total), names_to = "type", values_to = "flow") %>%
+  mutate(type = factor(type,
+                       levels = c("total_outflows", "total_inflows", "domestic", "non_vehicle"),
+                       labels = c("Outflows", "Inflows", "Domestic", "Non-Vehicle"))) %>%
+  ggplot(aes(fill = type, x = reorder(label, total), y = flow)) +
+  geom_bar(position = "stack", stat = "identity", color = "black") +
+  coord_flip() + 
+  theme_bw() +
+  # ggtitle("Top Crypto Receivers/Senders") +
+  xlab("") +
+  ylab("Total Flows (USD)") +
+  scale_fill_brewer(palette = "GnBu") +
+  scale_y_continuous(breaks = c(1000000000, 2000000000, 3000000000),
+                     labels = c("1B", "2B", "3B"))
+# +
+#   scale_fill_discrete(" ", breaks = c("total_inflows", "total_outflows"),
+#                       labels = c("Inflows", "Outflows"))
 
+show(total_flows_graph)
+
+
+ 
 
 
 
