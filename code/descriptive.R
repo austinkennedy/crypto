@@ -1,27 +1,4 @@
-#clear memory and setup
-rm(list=ls())
-options(scipen=999)
-
-library(tidyverse)
-library(vroom)
-library(lubridate)
-library(gt)
-source('functions.R')
-
-trades <- vroom('../temporary/trades_paxful_cleaned.csv')
-matched_trades <- vroom('../temporary/matched_paxful_trades.csv')
-total_volume <- vroom('../temporary/total_volume_by_country.csv')
-flows <- vroom('../temporary/bilateral_flows_balanced.csv')
-outflows <- vroom('../temporary/outflows_balanced.csv')
-country_data <- read.csv('../temporary/country_data.csv')
-
-
-country_data <- country_data %>%
-  add_row(alpha.2 = "US", label = "United States")
-
-
-
-
+ 
 ####US outflows graph
 
 stimulus_1 <- ymd('2020-04-12')
@@ -226,13 +203,14 @@ total_flows_graph <- total_combined_flows %>%
                        levels = c("total_outflows", "total_inflows", "domestic", "non_vehicle"),
                        labels = c("Outflows", "Inflows", "Domestic", "Non-Vehicle"))) %>%
   ggplot(aes(fill = type, x = reorder(label, total), y = flow)) +
-  geom_bar(position = "stack", stat = "identity", color = "black") +
+  geom_bar(position = "stack", stat = "identity") +
   coord_flip() + 
   theme_bw() +
   # ggtitle("Top Crypto Receivers/Senders") +
   xlab("") +
   ylab("Total Flows (USD)") +
-  scale_fill_brewer(palette = "GnBu") +
+  # scale_fill_brewer(palette = "GnBu") +
+  scale_fill_viridis_d(option = "C", direction = -1, name = " ") +
   scale_y_continuous(breaks = c(1000000000, 2000000000, 3000000000),
                      labels = c("1B", "2B", "3B"))
 # +
@@ -241,9 +219,31 @@ total_flows_graph <- total_combined_flows %>%
 
 show(total_flows_graph)
 
+ggsave('../output/descriptive_graphs/flows_by_country.png', plot = total_flows_graph, width = 11, height = 6, dpi = 300)
 
+flows_proportion_graph <- total_combined_flows %>%
+  slice_max(total, n = 10) %>%
+  # select(-non_vehicle) %>%
+  pivot_longer(cols = !c(code,label, total), names_to = "type", values_to = "flow") %>%
+  mutate(type = factor(type,
+                       levels = c("total_outflows", "total_inflows", "domestic", "non_vehicle"),
+                       labels = c("Outflows", "Inflows", "Domestic", "Non-Vehicle"))) %>%
+  ggplot(aes(fill = type, x = reorder(label, total), y = flow)) +
+  geom_bar(position = "fill", stat = "identity") +
+  coord_flip() + 
+  theme_bw() +
+  # ggtitle("Top Crypto Receivers/Senders") +
+  xlab("") +
+  ylab("Proportion") +
+  # scale_fill_brewer(palette = "GnBu") +
+  scale_fill_viridis_d(option = "D", direction = -1, name = " ")
  
+show(flows_proportion_graph)
 
+ggsave('../output/descriptive_graphs/flows_proportion_by_country.png', width = 11, height = 6, dpi = 300)
+
+######US crypto exports 
+ 
 
 
 
