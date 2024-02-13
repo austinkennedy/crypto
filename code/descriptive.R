@@ -1,3 +1,24 @@
+#clear memory and setup
+rm(list=ls())
+options(scipen=999)
+
+library(tidyverse)
+library(vroom)
+library(lubridate)
+library(gt)
+source('functions.R')
+
+trades <- vroom('../temporary/trades_paxful_cleaned.csv')
+matched_trades <- vroom('../temporary/matched_paxful_trades.csv')
+total_volume <- vroom('../temporary/total_volume_by_country.csv')
+flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+outflows <- vroom('../temporary/outflows_balanced.csv')
+country_data <- read.csv('../temporary/country_data.csv')
+
+
+country_data <- country_data %>%
+  add_row(alpha.2 = "US", label = "United States")
+
  
 ####US outflows graph
 
@@ -221,6 +242,7 @@ show(total_flows_graph)
 
 ggsave('../output/descriptive_graphs/flows_by_country.png', plot = total_flows_graph, width = 11, height = 6, dpi = 300)
 
+###Break flows into proportions
 flows_proportion_graph <- total_combined_flows %>%
   slice_max(total, n = 10) %>%
   # select(-non_vehicle) %>%
@@ -241,6 +263,25 @@ flows_proportion_graph <- total_combined_flows %>%
 show(flows_proportion_graph)
 
 ggsave('../output/descriptive_graphs/flows_proportion_by_country.png', width = 11, height = 6, dpi = 300)
+
+####country pairs
+
+country_pair_graph <- country_pair_flows %>%
+  slice_max(combined, n = 10) %>%
+  ggplot(aes(x = reorder(combined_name, combined), y = combined)) +
+  geom_bar(stat = "identity", fill = "blue4") +
+  theme_bw() +
+  coord_flip() +
+  xlab("Trading Pair") +
+  ylab('Total Combined Trading Volume') +
+  scale_y_continuous(breaks = c(50000000, 100000000, 150000000),
+                     labels = c("50M", "100M", "150M"))
+
+show(country_pair_graph)
+
+ggsave('../output/descriptive_graphs/country_pairs.png', width = 11, height = 6, dpi = 300)
+
+
 
 ######US crypto exports 
  
