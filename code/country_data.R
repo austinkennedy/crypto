@@ -32,7 +32,7 @@ fb_1yr <- fb_1yr %>%
 fb_5yr <- fb_5yr %>%
   rename(c(fb5 = 'estimate', moe5 = 'moe'))
 #merge acs estimates
-fb <- inner_join(fb_1yr, fb_5yr, by = 'label') %>%
+fb <- full_join(fb_1yr, fb_5yr, by = 'label') %>%
   select(-c(geography)) %>%
   relocate(label)
 
@@ -72,7 +72,7 @@ codes$Name <- str_replace(codes$Name, "Saint", "St.")
 
 #Merge crypto 2-digit with country names
 
-codes_merged <- crypto_cc %>% inner_join(codes, by = c("cc" = "Code"))
+codes_merged <- crypto_cc %>% left_join(codes, by = c("cc" = "Code"))
 
 codes_merged <- codes_merged %>% filter(!(Name == "Niger"))
 
@@ -102,25 +102,25 @@ country_merge <- stringdist_join(fb, codes_merged,
   ungroup()
 
 country_merge <- country_merge %>%
-  select(-c(Name, dist)) %>%
+  select(-c(dist)) %>%
   relocate(label)
 
 
 #merge with rest of cc data
-country_merge_all <- country_merge %>% inner_join(cc_all, by = c("cc" = "alpha.2"), keep = TRUE)
+country_merge_all <- country_merge %>% right_join(cc_all, by = c("cc" = "alpha.2"), keep = TRUE)
 
 #drop unnecessary columns
 country_merge_all <- country_merge_all %>%
-  select(-c(iso_3166.2, name, cc))
+  select(-c(iso_3166.2, cc))
 
 #population data
-pop <- pop %>%
+pop_data <- pop %>%
   filter(Time == 2019, LocTypeName == 'Country/Area') %>%
   select(c(ISO3_code, Time, PopTotal, Location))
 
-# pop$PopTotal <- pop$PopTotal * 1000 #foreign-born is per person
+# pop$PopTotal <- pop$PopTotal * 1000 #f oreign-born is per person
 
-country_data <- inner_join(country_merge_all, pop, by = c("alpha.3" = "ISO3_code")) %>%
+country_data <- left_join(country_merge_all, pop_data, by = c("alpha.3" = "ISO3_code")) %>%
   select(-c(Time, Location)) %>%
   mutate(fb1_per1000 = fb1 / PopTotal, #foreign born per capita
          fb5_per1000 = fb5 / PopTotal)
@@ -143,6 +143,16 @@ country_data <- country_data %>%
 #Above/below median remittance fee
 country_data <- country_data %>%
   mutate(fees_above = ifelse(fees_median >= median(sort(fees_median)), 1,0))
+
+#fix 'label' not having all country names
+country_data <- country_data %>%
+  select(-c(label, Name)) %>%
+  rename(label = name) %>%
+  relocate(label)
+
+country_data$label[country_data$alpha.2 == "US"] <- "United States"
+country_data$label[country_data$alpha.2 == "GB"] <- "United Kingdom"
+
 
 #export
 write.csv(country_data, '../temporary/country_data.csv')

@@ -15,10 +15,6 @@ flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
-
-country_data <- country_data %>%
-  add_row(alpha.2 = "US", label = "United States")
-
  
 ####US outflows graph
 

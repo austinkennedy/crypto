@@ -16,10 +16,6 @@ library(ggiplot)
 source('functions.R')
 
 ####OPTIONS
-
-#trade aggregation level, should be 'day' or 'week'
-agg_level <- 'week'
-
 #add phases
 announcement <- as.Date('2020-03-27')
 
@@ -29,9 +25,8 @@ window_start <- as.Date('2020-01-01')
 window_end <- as.Date('2020-06-07')
 
 
-#load matched trades
-trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
-trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
 #exclude other countries that have stimulus
