@@ -33,120 +33,67 @@ country_data <- read.csv('../temporary/country_data.csv')
 country_data <- country_data %>%
   filter(!alpha.2 %in% c('JP', 'KR', 'SG'))
 
-#overall outflows
-flows <- trades_matched %>%
-  filter(user_cc != user_cc2)
-
-flows <- inner_join(flows, country_data, by = c("user_cc2" = "alpha.2"))
-
 #US outflows
-outflows_us <- trades_matched %>%
-  filter(user_cc == "US" & user_cc2 != "US")
+outflows_us <- flows %>%
+  filter(user_cc == "US" & user_cc2 != "US") 
 
-#get volume
-flows_volume <- outflow_volume_country(flows, amount_usd, agg_level)
+#join crypto and country data and eliminate other countries with stimulus
+us_outflows_country <- left_join(outflows_us, country_data, by = c("user_cc2" = "alpha.2")) %>%
+  filter(!user_cc2 %in% c('JP', 'KR', 'SG'))
 
-us_outflows_volume <- outflow_volume_country(outflows_us, amount_usd, agg_level)
-
-#join crypto and country data
-us_outflows_country <- inner_join(us_outflows_volume, country_data, by = c("user_cc2" = "alpha.2"))
-
-flows_country <- inner_join(flows_volume, country_data, by = c("user_cc2" = "alpha.2"))
+flows_country <- left_join(flows, country_data, by = c("user_cc2" = "alpha.2")) %>%
+  filter(!user_cc %in% c('JP', 'KR', 'SG'))
 
 
 #######################Outflows only###################
 
-#make balanced
-dates <- unique(flows_country$time)
-countries <- unique(flows_country$user_cc)
-
-panel <- as_tibble(CJ(dates, countries)) %>% rename(time = dates, user_cc = countries)
-
 #get total outflows by source country, to varying country groups
 outflows_all <- flows_country %>%
   group_by(user_cc, time) %>%
-  summarize(volume = sum(volume))
+  summarize(volume_all = sum(volume))
 
 outflows_lm <- flows_country %>%
   filter(income_group %in% c('L','LM')) %>%
   group_by(user_cc, time) %>%
-  summarize(volume = sum(volume))  
+  summarize(volume_lm = sum(volume))  
 
 outflows_um <- flows_country %>%
   filter(income_group %in% c('UM','H')) %>%
   group_by(user_cc, time) %>%
-  summarize(volume = sum(volume))
+  summarize(volume_um = sum(volume))
 
-#create balanced panels
-
-outflows_all <- outflows_all %>%
-  right_join(panel, by = c('time', 'user_cc')) %>%
-  replace(is.na(.), 0)
-
-outflows_lm <- outflows_lm %>%
-  right_join(panel, by = c('time', 'user_cc')) %>%
-  replace(is.na(.), 0)
-
-outflows_um <- outflows_um %>%
-  right_join(panel, by = c('time', 'user_cc')) %>%
-  replace(is.na(.), 0)
+outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
+  reduce(left_join, by = c("user_cc", "time"))
 
 #add treatment dates
-outflows_all <- outflows_all %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-       disbursed = ifelse(time >= disbursement, 1, 0),
-       us_outflow = ifelse(user_cc == "US", 1, 0)
-)
-
-outflows_lm <- outflows_lm %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-                                      disbursed = ifelse(time >= disbursement, 1, 0),
-                                      us_outflow = ifelse(user_cc == "US", 1, 0)
-)
-
-outflows_um <- outflows_um %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-                                      disbursed = ifelse(time >= disbursement, 1, 0),
-                                      us_outflow = ifelse(user_cc == "US", 1, 0)
+outflows_joined <- outflows_joined %>%
+  mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+         disbursed = ifelse(time >= disbursement, 1, 0),
+         us_outflow = ifelse(user_cc == "US", 1, 0)
 )
 
 #CLUSTERING LEVEL
 cluster_level_spillovers <- c('user_cc')
 
-spillovers_model <- function(df, yvar){
-  reg <- df %>%
-    filter(time >= window_start & time <= window_end) %>%
-    feols(.[yvar] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+did_yvars <- c("volume_all", "volume_lm", "volume_um")
 
-  return(reg)
-}
+did_levels <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(.[yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
+summary(did_levels)
 
-did_all_levels <- spillovers_model(outflows_all, yvar = 'volume')
+did_logs <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(log(.[yvars]) ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
-summary(did_all_levels)
+summary(did_logs)
 
-did_lm_levels <- spillovers_model(outflows_lm, yvar = 'volume')
+did_qlme <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feglm(.[yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
-summary(did_lm_levels)
-
-did_um_levels <- spillovers_model(outflows_um, yvar = 'volume')
-
-summary(did_um_levels)
-
-# baseline <- outflows %>%
-#   filter(time >= as.Date('2020-01-01') & time <= disbursement,
-#          user_cc == 'US') %>%
-#   summarize(mean = mean(volume))
-
-did_all_asinh <- spillovers_model(outflows_all, yvar = 'asinh(volume)')
-
-summary(did_all_asinh)
-
-did_lm_asinh <- spillovers_model(outflows_lm, yvar = 'asinh(volume)')
-
-summary(did_lm_asinh)
-
-did_um_asinh <- spillovers_model(outflows_um, yvar = 'asinh(volume)')
-
-summary(did_um_asinh)
+summary(did_qlme)
 
 ####EVENTSTUDY
 
@@ -158,27 +105,35 @@ es_model <- function(df, yvar){
     return(reg)
 }
 
-es_all_levels <- es_model(outflows_all, yvar = 'volume')
+es_model <- function(df, yvar){
+  reg <- df %>%
+    filter(time >= window_start & time <= window_end) %>%
+    feglm(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+  
+  return(reg)
+}
+
+es_all_levels <- es_model(outflows_joined, yvar = 'volume_all')
 
 iplot(es_all_levels)
 
-es_lm_levels <- es_model(outflows_lm, yvar = 'volume')
+es_lm_levels <- es_model(outflows_joined, yvar = 'volume_lm')
 
 iplot(es_lm_levels)
 
-es_um_levels <- es_model(outflows_um, yvar = 'volume')
+es_um_levels <- es_model(outflows_joined, yvar = 'volume_um')
 
 iplot(es_um_levels)
 
-es_all_asinh <- es_model(outflows_all, yvar = 'asinh(volume)')
+es_all_asinh <- es_model(outflows_joined, yvar = 'log(volume_all)')
 
 iplot(es_all_asinh)
 
-es_lm_asinh <- es_model(outflows_lm, yvar = 'asinh(volume)')
+es_lm_asinh <- es_model(outflows_joined, yvar = 'log(volume_lm)')
 
 iplot(es_lm_asinh)
 
-es_um_asinh <- es_model(outflows_um, yvar = 'asinh(volume)')
+es_um_asinh <- es_model(outflows_joined, yvar = 'log(volume_um)')
 
 iplot(es_um_asinh)
 
@@ -370,6 +325,16 @@ outflows_us_non_us <- rbind(global_flows, us_flows)
 outflows_us_non_us %>% filter(time >= window_start & time <= '2020-09-01') %>% ggplot(aes(x = time, y = volume, color = user_cc)) + geom_line(size = 1) + theme_bw() + ggtitle("Cryptocurrency Outflows") + theme(plot.title = element_text(size = 15, hjust = 0.5)) + labs(color = 'Legend')
 
 ggsave('../output/figures_paxful/global_flows.png')
+
+######PLAYGROUND##########
+
+total <- outflows %>%
+  group_by(user_cc) %>%
+  summarize(total = sum(outflow))
+
+
+
+
 
 
 

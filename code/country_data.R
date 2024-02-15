@@ -23,6 +23,7 @@ cc_all <- read.csv('../input/all_cc_codes.csv')
 pop <- read.csv('../input/un_pop.csv')
 fees <- read.csv('../input/wb_remittance_prices.csv')
 income_groups <- read.csv('../input/income_groups.csv')
+oecd <- read.csv('../input/oecd.csv')
 
 
 #ACS data
@@ -152,6 +153,16 @@ country_data <- country_data %>%
 
 country_data$label[country_data$alpha.2 == "US"] <- "United States"
 country_data$label[country_data$alpha.2 == "GB"] <- "United Kingdom"
+
+#oecd data
+
+
+country_data <- country_data %>%
+  left_join(oecd, by = c("alpha.3" = "Code")) %>%
+  mutate(oecd = ifelse(!is.na(Accession), 1, 0)) %>%
+  select(-c(Name, Accession))
+ 
+
 
 
 #export
