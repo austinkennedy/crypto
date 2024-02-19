@@ -15,6 +15,11 @@ library(ggiplot)
 
 source('functions.R')
 
+####Load Data
+flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+outflows <- vroom('../temporary/outflows_balanced.csv')
+country_data <- read.csv('../temporary/country_data.csv')
+
 ####OPTIONS
 #add phases
 announcement <- as.Date('2020-03-27')
@@ -24,10 +29,6 @@ disbursement <- as.Date('2020-04-09')
 window_start <- as.Date('2020-01-01')
 window_end <- as.Date('2020-06-07')
 
-
-flows <- vroom('../temporary/bilateral_flows_balanced.csv')
-outflows <- vroom('../temporary/outflows_balanced.csv')
-country_data <- read.csv('../temporary/country_data.csv')
 
 #exclude other countries that have stimulus
 country_data <- country_data %>%
@@ -79,63 +80,43 @@ did_yvars <- c("volume_all", "volume_lm", "volume_um")
 
 did_levels <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(.[yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
 summary(did_levels)
 
 did_logs <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(log(.[yvars]) ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+  feols(.["log(.[did_yvars])"] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
 summary(did_logs)
 
 did_qlme <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feglm(.[yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
 summary(did_qlme)
 
 ####EVENTSTUDY
 
-es_model <- function(df, yvar){
-    reg <- df %>%
-      filter(time >= window_start & time <= window_end) %>%
-      feols(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
-    
-    return(reg)
-}
+es_yvars <- c("volume_all", "volume_lm", "volume_um")
 
-es_model <- function(df, yvar){
-  reg <- df %>%
-    filter(time >= window_start & time <= window_end) %>%
-    feglm(.[yvar] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
-  
-  return(reg)
-}
+es_levels <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
 
-es_all_levels <- es_model(outflows_joined, yvar = 'volume_all')
+iplot(es_levels)
 
-iplot(es_all_levels)
+es_logs <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(.["log(.[es_yvars])"] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
 
-es_lm_levels <- es_model(outflows_joined, yvar = 'volume_lm')
+iplot(es_logs)
 
-iplot(es_lm_levels)
+es_qmle <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feglm(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
-es_um_levels <- es_model(outflows_joined, yvar = 'volume_um')
-
-iplot(es_um_levels)
-
-es_all_asinh <- es_model(outflows_joined, yvar = 'log(volume_all)')
-
-iplot(es_all_asinh)
-
-es_lm_asinh <- es_model(outflows_joined, yvar = 'log(volume_lm)')
-
-iplot(es_lm_asinh)
-
-es_um_asinh <- es_model(outflows_joined, yvar = 'log(volume_um)')
-
-iplot(es_um_asinh)
+iplot(es_qmle)
 
 
 ##########US-only outflows
