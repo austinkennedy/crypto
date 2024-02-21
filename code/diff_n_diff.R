@@ -27,7 +27,7 @@ announcement <- as.Date('2020-03-27')
 disbursement <- as.Date('2020-04-09')
 
 window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-06-07')
+window_end <- as.Date('2020-09-07')
 
 
 #exclude other countries that have stimulus
@@ -64,7 +64,8 @@ outflows_um <- flows_country %>%
   summarize(volume_um = sum(volume))
 
 outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
-  reduce(left_join, by = c("user_cc", "time"))
+  reduce(left_join, by = c("user_cc", "time")) %>%
+  left_join(country_data[, c('alpha.2', 'oecd')], by = c('user_cc' = 'alpha.2'))
 
 #add treatment dates
 outflows_joined <- outflows_joined %>%
@@ -95,6 +96,20 @@ did_qlme <- outflows_joined %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
 summary(did_qlme)
+
+did_qlme_oecd <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         oecd == 1) %>%
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+
+summary(did_qlme_oecd)
+
+did_levels_oecd <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         oecd == 1) %>%
+  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+
+summary(did_levels_oecd)
 
 ####EVENTSTUDY
 
@@ -135,8 +150,16 @@ us_outflows_um <- us_outflows_country %>% filter(income_group %in% c('UM', 'H'))
 fb_model <- function(df, yvar){
   reg <- df %>%
     filter(time >= window_start & time <= window_end) %>%
-    feols(.[yvar] ~ i(disbursed, asinh(fb1), ref = 0)|time + user_cc2,
+    feols(.[yvar] ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2,
                       cluster = c('user_cc2'))
+  
+}
+
+fb_model <- function(df, yvar){
+  reg <- df %>%
+    filter(time >= window_start & time <= window_end) %>%
+    feglm(.[yvar] ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2,
+          cluster = c('user_cc2'), family = quasipoisson)
   
 }
 
@@ -152,17 +175,17 @@ fb_reg_um_levels <- fb_model(us_outflows_um, yvar = 'volume')
 
 summary(fb_reg_um_levels)
 
-fb_reg_all_asinh <- fb_model(us_outflows_country, yvar = 'asinh(volume)')
+fb_reg_all_log <- fb_model(us_outflows_country, yvar = 'log(volume)')
 
-summary(fb_reg_all_asinh)
+summary(fb_reg_all_log)
 
-fb_reg_lm_asinh <- fb_model(us_outflows_lm, yvar = 'asinh(volume)')
+fb_reg_lm_log <- fb_model(us_outflows_lm, yvar = 'log(volume)')
 
-summary(fb_reg_lm_asinh)
+summary(fb_reg_lm_log)
 
-fb_reg_um_asinh <- fb_model(us_outflows_um, yvar = 'asinh(volume)')
+fb_reg_um_log <- fb_model(us_outflows_um, yvar = 'log(volume)')
 
-summary(fb_reg_um_asinh)
+summary(fb_reg_um_log)
 
 #TABLES
 
@@ -271,29 +294,39 @@ kableExtra::save_kable(spillovers_table_no_panel, file = '../output/regression_t
 
 ####EVENT STUDY GRAPHS
 
-ggiplot(es_all_levels, col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'Volume (USD)', main = 'Levels') + theme(axis.text.x = element_text(angle=90, vjust = .5))
+#change names of models
+names(es_levels) <- c("All Income Levels", "Low and Lower-Middle Income", "Upper-Middle and High Income")
 
-ggsave('../output/event_study_plots/es_all_levels.png')
+names(es_qmle) <- c("All Income Levels", "Low and Lower-Middle Income", "Upper-Middle and High Income")
 
-ggiplot(es_all_asinh, col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'asinh(Volume)', main = 'Inverse Hyperbolic Sine') + theme(axis.text.x = element_text(angle=90, vjust = .5))
 
-ggsave('../output/event_study_plots/es_all_asinh.png')
+es_levels_plot <- ggiplot(es_levels, geom_style = "errorbar", ylab = "Estimate", main = "Levels (USD Equivalent)") +
+  theme(axis.text.x = element_text(angle = 90, vjust = .5))
 
-es_levels <- list("Full Sample" = es_all_levels,
-                  "Low and Lower-Middle Income" = es_lm_levels,
-                  "Upper-Middle and High Income" = es_um_levels)
+show(es_levels_plot)
 
-ggiplot(es_levels, geom_style = "errorbar", ylab = "Volume (USD)", main = "Levels") + theme(axis.text.x = element_text(angle = 90, vjust = .5))
+ggsave('../output/event_study_plots/es_levels.png', plot = es_levels_plot)
 
-ggsave('../output/event_study_plots/es_levels.png')
+es_qmle_plot <- ggiplot(es_qmle, geom_style = "errorbar", ylab = "Estimate", main = "Poisson QMLE") +
+  theme(axis.text.x = element_text(angle = 90, vjust = .5)) 
 
-es_asinh <- list("Full Sample" = es_all_asinh,
-                 "Low and Lower-Middle Income" = es_lm_asinh,
-                 "Upper-Middle and High Income" = es_um_asinh)
+show(es_qmle_plot)
+
+ggsave('../output/event_study_plots/es_qmle.png', plot = es_qmle_plot)
+
+
 
 ggiplot(es_asinh, geom_style = 'errorbar', ylab = "asinh(Volume)", main = "Inverse Hyperbolic Sine") + theme(axis.text.x = element_text(angle = 90, vjust = .5))
  
 ggsave('../output/event_study_plots/es_asinh.png')
+
+
+
+es_levels_all <- ggiplot(es_levels[[1]], col = 'deepskyblue3', geom_style = 'errorbar', ylab = 'Volume (USD)', main = 'Levels') + theme(axis.text.x = element_text(angle=90, vjust = .5))
+
+ggsave('../output/event_study_plots/es_levels.png', plot = es_levels_all)
+
+
 
 ####Show flows with US vs. Non-US
 

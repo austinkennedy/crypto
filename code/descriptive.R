@@ -141,7 +141,7 @@ total_inflows <- flows %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc2" = "alpha.2")) %>%
+  left_join(country_data[, c("alpha.2", "label")], by = c("user_cc2" = "alpha.2")) %>%
   rename(code = user_cc2)
 
 total_outflows <- flows %>%
@@ -150,7 +150,7 @@ total_outflows <- flows %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  left_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
   rename(code = user_cc)
 
 total_domestic <- flows %>%
@@ -159,7 +159,7 @@ total_domestic <- flows %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  inner_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  left_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
   rename(code = user_cc)
 
 total_combined_flows <- inner_join(total_inflows[, c("code", "total")], total_outflows[, c("code", "total")], by = "code", suffix = c("_inflows", "_outflows")) %>%
@@ -167,7 +167,7 @@ total_combined_flows <- inner_join(total_inflows[, c("code", "total")], total_ou
   rename(domestic = total) %>%
   inner_join(total_volume, by = c("code" = "user_cc")) %>%
   mutate(non_vehicle = total - domestic - total_inflows - total_outflows) %>%
-  inner_join(country_data[, c("alpha.2", "label")], by = c("code" = "alpha.2"))
+  left_join(country_data[, c("alpha.2", "label")], by = c("code" = "alpha.2"))
 
 country_pair_flows <- flows %>%
   filter(user_cc != user_cc2) %>%
