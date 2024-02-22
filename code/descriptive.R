@@ -26,7 +26,7 @@ stimulus_graph <- outflows %>%
          time <= '2021-01-01') %>%
   ggplot(., aes(x = time, y = outflow)) +
   geom_line(color = 'blue', size = 0.8) +
-  geom_vline(xintercept = stimulus_1, color = 'red', size = 0.8) +
+  geom_vline(xintercept = stimulus_1, color = 'red', linewidth = 0.8) +
   annotate(x = stimulus_1, y = +Inf, label = "CARES ACT", vjust = 2, geom = "label") +
   scale_x_date(breaks = "month", date_labels = '%b %Y') +
   scale_y_continuous(breaks = c(400000, 600000, 800000, 1000000), labels = c('400,000', '600,000', '800,000', '1,000,000'))+

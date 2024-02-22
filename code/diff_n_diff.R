@@ -18,7 +18,9 @@ source('functions.R')
 ####Load Data
 flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
+outflows_us <- vroom('../temporary/us_outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
+baseline_shares <- read.csv('../temporary/baseline_shares.csv')
 
 ####OPTIONS
 #add phases
@@ -29,43 +31,37 @@ disbursement <- as.Date('2020-04-09')
 window_start <- as.Date('2020-01-01')
 window_end <- as.Date('2020-09-07')
 
+treated_countries <- c('JP', 'KR', 'SG')
 
-#exclude other countries that have stimulus
-country_data <- country_data %>%
-  filter(!alpha.2 %in% c('JP', 'KR', 'SG'))
+#filter other countries with stimulus
+outflows_us <- outflows_us %>%
+  filter(!user_cc2 %in% treated_countries)
 
-#US outflows
-outflows_us <- flows %>%
-  filter(user_cc == "US" & user_cc2 != "US") 
-
-#join crypto and country data and eliminate other countries with stimulus
-us_outflows_country <- left_join(outflows_us, country_data, by = c("user_cc2" = "alpha.2")) %>%
-  filter(!user_cc2 %in% c('JP', 'KR', 'SG'))
-
-flows_country <- left_join(flows, country_data, by = c("user_cc2" = "alpha.2")) %>%
-  filter(!user_cc %in% c('JP', 'KR', 'SG'))
+flows <- flows %>%
+  filter(!user_cc %in% treated_countries)
 
 
 #######################Outflows only###################
 
 #get total outflows by source country, to varying country groups
-outflows_all <- flows_country %>%
+outflows_all <- flows %>%
   group_by(user_cc, time) %>%
   summarize(volume_all = sum(volume))
 
-outflows_lm <- flows_country %>%
+outflows_lm <- flows %>%
   filter(income_group %in% c('L','LM')) %>%
   group_by(user_cc, time) %>%
   summarize(volume_lm = sum(volume))  
 
-outflows_um <- flows_country %>%
+outflows_um <- flows %>%
   filter(income_group %in% c('UM','H')) %>%
   group_by(user_cc, time) %>%
   summarize(volume_um = sum(volume))
 
 outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
   reduce(left_join, by = c("user_cc", "time")) %>%
-  left_join(country_data[, c('alpha.2', 'oecd')], by = c('user_cc' = 'alpha.2'))
+  left_join(country_data[, c('alpha.2', 'oecd')], by = c('user_cc' = 'alpha.2')) %>%
+  left_join(baseline_shares, by = 'user_cc')
 
 #add treatment dates
 outflows_joined <- outflows_joined %>%
@@ -79,23 +75,23 @@ cluster_level_spillovers <- c('user_cc')
 
 did_yvars <- c("volume_all", "volume_lm", "volume_um")
 
+baseline_controls <- outflows_joined %>%
+  ungroup() %>%
+  select(BJ:ZA) %>%
+  colnames()
+
 did_levels <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
   feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
 summary(did_levels)
 
-did_logs <- outflows_joined %>%
-  filter(time >= window_start & time <= window_end) %>%
-  feols(.["log(.[did_yvars])"] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
-
-summary(did_logs)
-
 did_qlme <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
 summary(did_qlme)
+ 
 
 did_qlme_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
@@ -111,6 +107,11 @@ did_levels_oecd <- outflows_joined %>%
 
 summary(did_levels_oecd)
 
+did_levels_controls <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls]|user_cc + time, cluster = cluster_level_spillovers)
+  
+summary(did_levels_controls)
 ####EVENTSTUDY
 
 es_yvars <- c("volume_all", "volume_lm", "volume_um")
@@ -121,11 +122,12 @@ es_levels <- outflows_joined %>%
 
 iplot(es_levels)
 
-es_logs <- outflows_joined %>%
-  filter(time >= window_start & time <= window_end) %>%
-  feols(.["log(.[es_yvars])"] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
+es_levels_oecd<- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         oecd == 1) %>%
+  feols(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
 
-iplot(es_logs)
+iplot(es_levels_oecd)
 
 es_qmle <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
@@ -133,6 +135,18 @@ es_qmle <- outflows_joined %>%
 
 iplot(es_qmle)
 
+es_qmle_oecd <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         oecd == 1) %>%
+  feglm(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+iplot(es_qmle_oecd)
+
+es_qmle_controls <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feglm(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05') + .[baseline_controls]|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+iplot(es_qmle_controls)
 
 ##########US-only outflows
 
@@ -330,13 +344,15 @@ ggsave('../output/event_study_plots/es_levels.png', plot = es_levels_all)
 
 ####Show flows with US vs. Non-US
 
-global_flows <- outflows_all %>% filter(user_cc != 'US') %>% group_by(time) %>% summarize(volume = sum(volume))
+global_flows <- outflows_all %>% filter(user_cc != 'US') %>% group_by(time) %>% summarize(volume_all = sum(volume_all))
 global_flows$user_cc = 'Non-US'
-us_flows <- outflows_all %>% filter(user_cc == 'US') %>% select(user_cc, volume, time)
+us_flows <- outflows_all %>% filter(user_cc == 'US') %>% select(user_cc, volume_all, time)
 
 outflows_us_non_us <- rbind(global_flows, us_flows)
 
-outflows_us_non_us %>% filter(time >= window_start & time <= '2020-09-01') %>% ggplot(aes(x = time, y = volume, color = user_cc)) + geom_line(size = 1) + theme_bw() + ggtitle("Cryptocurrency Outflows") + theme(plot.title = element_text(size = 15, hjust = 0.5)) + labs(color = 'Legend')
+outflows_us_non_us %>% filter(time >= window_start & time <= '2020-09-01') %>% ggplot(aes(x = time, y = volume_all, color = user_cc)) + geom_line(size = 1) + theme_bw() + ggtitle("Cryptocurrency Outflows") + theme(plot.title = element_text(size = 15, hjust = 0.5)) + labs(color = 'Legend')
+
+show(outflows_us_non_us)
 
 ggsave('../output/figures_paxful/global_flows.png')
 

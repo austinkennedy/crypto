@@ -15,12 +15,17 @@ baseline <- '2019-01-01'
 trades <- vroom('../temporary/trades_paxful_cleaned.csv')
 trades_matched <- vroom('../temporary/matched_paxful_trades.csv')
 trades_matched$date <- as.POSIXct(trades_matched$date, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
+country_data <- read.csv('../temporary/country_data.csv')
 
 #get bilateral flows
 flows <- getFlows(trades_matched, amount_usd, 'week') %>% na.omit()
 
 #make balanced
 flows_balanced <- balanceFlows(flows)
+
+#join country data
+flows_balanced <- flows_balanced %>%
+  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
 
 #aggregate into total outflows, by origin country & time
 
@@ -43,11 +48,18 @@ outflows_baseline <- getFlows(trades_matched, amount_usd, 'year') %>%
 outflows_baseline <- balanceFlows(outflows_baseline)
 
 shares_baseline <- outflows_baseline %>%
-  group_by(time, user_cc) %>%
+  group_by(user_cc) %>%
   mutate(share = volume/sum(volume)) %>%
   select(-c(volume))
 
+#select top destinations
+us_top_baseline <- shares_baseline %>%
+  filter(user_cc == "US") %>%
+  slice_max(share, n = 10) %>%
+  pull(user_cc2) 
+
 shares_wide <- shares_baseline %>%
+  filter(user_cc2 %in% us_top_baseline) %>%
   pivot_wider(names_from = user_cc2, values_from = share) %>%
   ungroup() %>%
   select(-c(time))
@@ -60,8 +72,27 @@ total_volume <- trades %>%
   group_by(user_cc) %>%
   summarize(total = sum(amount_usd))
 
+#####US outflows
+us_outflows <- flows_balanced %>%
+  filter(user_cc == "US" & user_cc2 != "US") %>%
+  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
+
+
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
+write.csv(us_outflows, '../temporary/us_outflows_balanced.csv', row.names = FALSE)
+write.csv(shares_wide, '../temporary/baseline_shares.csv', row.names = FALSE)
 write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)
 write.csv(total_volume, '../temporary/total_volume_by_country.csv', row.names = FALSE)
+
+
+######Data playground
+
+US_baseline_shares <- shares_baseline %>%
+  filter(user_cc == "US") %>%
+  arrange(desc(share)) %>%
+  mutate(cumulutive = cumsum(share))
+
+
+
