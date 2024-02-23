@@ -29,7 +29,7 @@ announcement <- as.Date('2020-03-27')
 disbursement <- as.Date('2020-04-09')
 
 window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-09-07')
+window_end <- as.Date('2020-06-07')
 
 treated_countries <- c('JP', 'KR', 'SG')
 
@@ -60,7 +60,7 @@ outflows_um <- flows %>%
 
 outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
   reduce(left_join, by = c("user_cc", "time")) %>%
-  left_join(country_data[, c('alpha.2', 'oecd')], by = c('user_cc' = 'alpha.2')) %>%
+  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
   left_join(baseline_shares, by = 'user_cc')
 
 #add treatment dates
@@ -86,32 +86,52 @@ did_levels <- outflows_joined %>%
 
 summary(did_levels)
 
-did_qlme <- outflows_joined %>%
+did_qmle <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
-summary(did_qlme)
+etable(did_qmle)
  
 
-did_qlme_oecd <- outflows_joined %>%
+did_qmle_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
-summary(did_qlme_oecd)
+etable(did_qmle_oecd)
+
+did_qmle_highincome <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(did_qmle_highincome)
+
+did_qmle_controls <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(did_qmle_controls)
+
+did_qmle_controls_oecd <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         oecd == 1) %>%
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(did_qmle_controls_oecd)
 
 did_levels_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
   feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
 
-summary(did_levels_oecd)
+etable(did_levels_oecd)
 
 did_levels_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls]|user_cc + time, cluster = cluster_level_spillovers)
+  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers)
   
-summary(did_levels_controls)
+etable(did_levels_controls)
 ####EVENTSTUDY
 
 es_yvars <- c("volume_all", "volume_lm", "volume_um")
@@ -141,6 +161,13 @@ es_qmle_oecd <- outflows_joined %>%
   feglm(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
 iplot(es_qmle_oecd)
+
+es_qmle_highincome <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[es_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+iplot(es_qmle_highincome)
 
 es_qmle_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
@@ -201,68 +228,54 @@ fb_reg_um_log <- fb_model(us_outflows_um, yvar = 'log(volume)')
 
 summary(fb_reg_um_log)
 
-#TABLES
+############TABLES
 
-#collect models
-spillovers_levels <- list("Full Sample" = did_all_levels,
-                          "Low and Lower-Middle Income" = did_lm_levels,
-                          "Upper-Middle and High Income" = did_um_levels)
+#WITH PANELS
 
-spillovers_asinh <- list("Full Sample" = did_all_asinh,
-                         "Low and Lower-Middle Income" = did_lm_asinh,
-                         "Upper-Middle and High Income" = did_um_asinh)
+model_names <- c("All Destinations", "Low and Lower-Middle Income", "Upper-Middle and High Income")
 
-fb_levels <- list("Full Sample" = fb_reg_all_levels,
-                  "Low and Lower-Middle Income" = fb_reg_lm_levels,
-                  "Upper-Middle and High Income" = fb_reg_um_levels)
+names(did_qmle) <- model_names
+names(did_qmle_highincome) <- model_names
+names(did_qmle_oecd) <- model_names
 
-fb_asinh <- list("Full Sample" = fb_reg_all_asinh,
-                 "Low and Lower-Middle Income" = fb_reg_lm_asinh,
-                 "Upper-Middle and High Income" = fb_reg_um_asinh)
+did_models <- list('Full Control Group' = did_qmle,
+                   'High Income Countries Only' = did_qmle_highincome,
+                   'OECD Countries Only' = did_qmle_oecd)
 
-spillovers_map <- c('(Intercept)' = '$(\\text{Intercept})$',
-                      'us_outflow' = '$\\text{US}$',
-                      'announced' = '$\\text{announced}$',
-                      'disbursed' = '$\\text{disbursed}$',
-                      'us_outflow:announced' = '$\\text{announced} \\times \\text{US}$',
-                      'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$'
-                      )
-
-fb_map <- c('disbursed::1:asinh(fb1)' = '$\\text{disbursed} \\times asinh(\\text{FB})$')
+cmap_did <- c('(Intercept)' = '$(\\text{Intercept})$',
+                            'us_outflow' = '$\\text{US}$',
+                            'announced' = '$\\text{announced}$',
+                            'disbursed' = '$\\text{disbursed}$',
+                            'us_outflow:announced' = '$\\text{announced} \\times \\text{US}$',
+                            'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$'
+)
 
 gof_omitted <- "AIC|BIC|RMSE|Std.Errors|R2 Within"
 
-note_spillovers <- "Standard errors clustered at the country level."
+note_did <- "Standard Errors clustered at the country level."
 
-note_fb <- "Robust standard errors reported in parenthesis."
+gm_did <- tribble(~raw, ~clean, ~fmt,
+                  "nobs", "$\\text{N}$", "%.0f",
+                  "r.squared", "$R^{2}$", "%.2f",
+                  "adj.r.squared", "$R^{2} Adj.$", "%.2f")
 
-gm_spillovers <- tribble(~raw, ~clean, ~fmt,
-                    "FE: time", "Time FE", "%.4f",
-                    "FE: user_cc2", "Receiving Country FE", "%.4f",
-                    "nobs", "$\\text{N}$", "%.0f",
-                    "r.squared", "$R^{2}$", "%.2f",
-                    "adj.r.squared", "$R^{2} Adj.$", "%.2f")
+did_table <- modelsummary(did_models,
+                          stars = TRUE,
+                          shape = 'rbind',
+                          coef_map = cmap_did,
+                          # gof_map = gm_did,
+                          # gof_omit = gof_omitted,
+                          title = "Poisson QMLE–Dependent Variable: Cryptocurrency Outflows",
+                          escape = FALSE,
+                          output = 'latex') %>%
+  add_footnote(note_did, threeparttable = TRUE)
 
-spillover_models <- list('Inverse Hyperbolic Sine' = spillovers_asinh,
-                         'Levels (USD equivalent)' = spillovers_levels)
+show(did_table)
+
+kableExtra::save_kable(did_table, file = "../output/regression_tables/did_qmle.tex")
 
 fb_models <- list('Inverse Hyperbolic Sine' = fb_asinh,
                   'Levels (USD equivalent)' = fb_levels)
-
-spillovers_table <- modelsummary(spillover_models,
-             stars = TRUE,
-             shape = 'rbind',
-             coef_map = spillovers_map,
-             gof_omit = gof_omitted,
-             gof_map = gm_spillovers,
-             title = 'Dependent Variable: Cryptocurrency Outflows',
-             escape = FALSE,
-             output = 'latex') %>%
-  add_footnote(note_spillovers, threeparttable = TRUE)
-
-show(spillovers_table)
-
-kableExtra::save_kable(spillovers_table, file = '../output/regression_tables/spillovers.tex')
 
 fb_table <- modelsummary(fb_models,
                          stars = TRUE,
@@ -309,9 +322,41 @@ kableExtra::save_kable(spillovers_table_no_panel, file = '../output/regression_t
 ####EVENT STUDY GRAPHS
 
 #change names of models
-names(es_levels) <- c("All Income Levels", "Low and Lower-Middle Income", "Upper-Middle and High Income")
+names(es_levels) <- model_names
 
-names(es_qmle) <- c("All Income Levels", "Low and Lower-Middle Income", "Upper-Middle and High Income")
+names(es_qmle) <- model_names
+names(es_qmle_highincome) <- model_names
+names(es_qmle_oecd) <- model_names
+
+es_plot <- function(es_model, title){
+  ggiplot(es_model, geom_style = "errorbar", ylab = 'Estimate', main = title, multi_style = "dodge") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5))
+}
+
+es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Sample: All Destinations")
+
+show(es_qmle_plot_all)
+
+es_qmle_plot_split <- es_plot(es_qmle[2:3], title = "Full Sample: By Destination Income Group")
+
+show(es_qmle_plot_split)
+
+es_qmle_plot_all_highincome <- es_plot(es_qmle_highincome[[1]], title = "High Income Sample: All Destinations")
+
+show(es_qmle_plot_all_highincome)
+
+es_qmle_plot_split_highincome <- es_plot(es_qmle_highincome[2:3], title = "High Income Sample: By Destination Income Group")
+
+show(es_qmle_plot_split_highincome)
+
+es_qmle_plot_all_oecd <- es_plot(es_qmle_oecd[[1]], title = "OECD Sample: All Destinations")
+
+show(es_qmle_plot_all_oecd)
+
+es_qmle_plot_split_oecd <- es_plot(es_qmle_oecd[2:3], title = "OECD Sample: By Destination Income Group")
+
+show(es_qmle_plot_split_oecd)
+
 
 
 es_levels_plot <- ggiplot(es_levels, geom_style = "errorbar", ylab = "Estimate", main = "Levels (USD Equivalent)") +
