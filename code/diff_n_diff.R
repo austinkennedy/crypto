@@ -48,32 +48,57 @@ outflows_all <- flows %>%
   group_by(user_cc, time) %>%
   summarize(volume_all = sum(volume))
 
-outflows_lm <- flows %>%
-  filter(income_group %in% c('L','LM')) %>%
+outflows_l <- flows %>%
+    filter(income_group %in% c('L')) %>%
+    group_by(user_cc, time) %>%
+    summarize(volume_l = sum(volume))
+
+outflows_m <- flows %>%
+  filter(income_group %in% c('LM','UM')) %>%
   group_by(user_cc, time) %>%
-  summarize(volume_lm = sum(volume))  
+  summarize(volume_m = sum(volume))
 
-outflows_um <- flows %>%
-  filter(income_group %in% c('UM','H')) %>%
+outflows_h <- flows %>%
+  filter(income_group %in% c('H')) %>%
   group_by(user_cc, time) %>%
-  summarize(volume_um = sum(volume))
+  summarize(volume_h = sum(volume))
 
-outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
-  reduce(left_join, by = c("user_cc", "time")) %>%
-  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
-  left_join(baseline_shares, by = 'user_cc')
-
-#add treatment dates
-outflows_joined <- outflows_joined %>%
-  mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+outflows_joined <- list(outflows_all, outflows_l, outflows_m, outflows_h) %>%
+    reduce(left_join, by = c("user_cc", "time")) %>%
+    left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+    left_join(baseline_shares, by = 'user_cc') %>%
+    mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
          disbursed = ifelse(time >= disbursement, 1, 0),
          us_outflow = ifelse(user_cc == "US", 1, 0)
-)
+  )
+  
+# 
+# outflows_lm <- flows %>%
+#   filter(income_group %in% c('L','LM')) %>%
+#   group_by(user_cc, time) %>%
+#   summarize(volume_lm = sum(volume))  
+# 
+# outflows_um <- flows %>%
+#   filter(income_group %in% c('UM','H')) %>%
+#   group_by(user_cc, time) %>%
+#   summarize(volume_um = sum(volume))
+# 
+# outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
+#   reduce(left_join, by = c("user_cc", "time")) %>%
+#   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+#   left_join(baseline_shares, by = 'user_cc') %>%
+#   mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+#        disbursed = ifelse(time >= disbursement, 1, 0),
+#        us_outflow = ifelse(user_cc == "US", 1, 0)
+# )
+
 
 #CLUSTERING LEVEL
 cluster_level_spillovers <- c('user_cc')
 
-did_yvars <- c("volume_all", "volume_lm", "volume_um")
+# did_yvars <- c("volume_all", "volume_lm", "volume_um")
+
+did_yvars <- c('volume_all', 'volume_l', 'volume_m', 'volume_h')
 
 baseline_controls <- outflows_joined %>%
   ungroup() %>%
@@ -91,6 +116,13 @@ did_qmle <- outflows_joined %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle)
+
+did_qmle_highincome <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(did_qmle_highincome)
  
 
 did_qmle_oecd <- outflows_joined %>%
@@ -99,13 +131,6 @@ did_qmle_oecd <- outflows_joined %>%
   feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle_oecd)
-
-did_qmle_highincome <- outflows_joined %>%
-  filter(time >= window_start & time <= window_end,
-         income_group == 'H') %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
-
-etable(did_qmle_highincome)
 
 did_qmle_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
