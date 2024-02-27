@@ -74,8 +74,7 @@ total_volume <- trades %>%
 
 #####US outflows
 us_outflows <- flows_balanced %>%
-  filter(user_cc == "US" & user_cc2 != "US") %>%
-  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
+  filter(user_cc == "US" & user_cc2 != "US")
 
 
 #export data

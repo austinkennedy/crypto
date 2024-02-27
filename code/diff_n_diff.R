@@ -100,6 +100,8 @@ cluster_level_spillovers <- c('user_cc')
 
 did_yvars <- c('volume_all', 'volume_l', 'volume_m', 'volume_h')
 
+did_fml <- as.formula('.[did_yvars] ~ disbursed*us_outflow')
+
 baseline_controls <- outflows_joined %>%
   ungroup() %>%
   select(BJ:ZA) %>%
@@ -107,20 +109,20 @@ baseline_controls <- outflows_joined %>%
 
 did_levels <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+  feols(did_fml, cluster = cluster_level_spillovers)
 
 summary(did_levels)
 
 did_qmle <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(did_fml, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle)
 
 did_qmle_highincome <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          income_group == 'H') %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(did_fml, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle_highincome)
  
@@ -128,33 +130,33 @@ etable(did_qmle_highincome)
 did_qmle_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(did_fml, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle_oecd)
 
 did_qmle_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ disbursed*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle_controls)
 
 did_qmle_controls_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
-  feglm(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ disbursed*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(did_qmle_controls_oecd)
 
 did_levels_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
-  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow, cluster = cluster_level_spillovers)
+  feols(did_fml, cluster = cluster_level_spillovers)
 
 etable(did_levels_oecd)
 
 did_levels_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(.[did_yvars] ~ disbursed*us_outflow + announced*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers)
+  feols(.[did_yvars] ~ disbursed*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers)
   
 etable(did_levels_controls)
 ####EVENTSTUDY
@@ -204,44 +206,50 @@ iplot(es_qmle_controls)
 
 #add announced and disbursed variables
 
-us_outflows_country <- us_outflows_country %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+outflows_us <- outflows_us %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
        disbursed = ifelse(time >= disbursement, 1, 0))
 
 #Create lm and um datasets
 
-us_outflows_lm <- us_outflows_country %>% filter(income_group %in% c('L', 'LM'))
+# us_outflows_lm <- us_outflows_country %>% filter(income_group %in% c('L', 'LM'))
+# 
+# us_outflows_um <- us_outflows_country %>% filter(income_group %in% c('UM', 'H'))
 
-us_outflows_um <- us_outflows_country %>% filter(income_group %in% c('UM', 'H'))
-
-fb_model <- function(df, yvar){
+fb_model <- function(df, yvar, income_g){
   reg <- df %>%
-    filter(time >= window_start & time <= window_end) %>%
+    filter(time >= window_start & time <= window_end,
+           income_group %in% income_g) %>%
     feols(.[yvar] ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2,
                       cluster = c('user_cc2'))
   
 }
 
-fb_model <- function(df, yvar){
+fb_model <- function(df, yvar, income_g){
   reg <- df %>%
-    filter(time >= window_start & time <= window_end) %>%
+    filter(time >= window_start & time <= window_end,
+           income_group %in% income_g) %>%
     feglm(.[yvar] ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2,
           cluster = c('user_cc2'), family = quasipoisson)
   
 }
 
-fb_reg_all_levels <- fb_model(us_outflows_country, yvar = 'volume')
+fb_reg_all_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('L', 'LM', 'UM', 'H'))
 
 summary(fb_reg_all_levels)
 
-fb_reg_lm_levels <- fb_model(us_outflows_lm, yvar = 'volume')
+fb_reg_l_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('L'))
 
-summary(fb_reg_lm_levels)
+summary(fb_reg_l_levels)
 
-fb_reg_um_levels <- fb_model(us_outflows_um, yvar = 'volume')
+fb_reg_m_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('LM', 'UM'))
 
-summary(fb_reg_um_levels)
+summary(fb_reg_m_levels)
 
-fb_reg_all_log <- fb_model(us_outflows_country, yvar = 'log(volume)')
+fb_reg_h_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('H'))
+
+summary(fb_reg_h_levels)
+
+fb_reg_all_log <- fb_model(outflows_us, yvar = 'log(volume)')
 
 summary(fb_reg_all_log)
 
