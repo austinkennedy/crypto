@@ -210,21 +210,21 @@ fb_model <- function(df, yvar, income_g){
   
 }
 
-fb_reg_all_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('L', 'LM', 'UM', 'H'))
+fb_qmle_all <- fb_model(outflows_us, yvar = 'volume', income_g = c('L', 'LM', 'UM', 'H'))
 
-summary(fb_reg_all_levels)
+etable(fb_qmle_all)
 
-fb_reg_l_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('L'))
+fb_qmle_l <- fb_model(outflows_us, yvar = 'volume', income_g = c('L'))
 
-summary(fb_reg_l_levels)
+etable(fb_qmle_l)
 
-fb_reg_m_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('LM', 'UM'))
+fb_qmle_m <- fb_model(outflows_us, yvar = 'volume', income_g = c('LM', 'UM'))
 
-summary(fb_reg_m_levels)
+etable(fb_qmle_m)
 
-fb_reg_h_levels <- fb_model(outflows_us, yvar = 'volume', income_g = c('H'))
+fb_qmle_h <- fb_model(outflows_us, yvar = 'volume', income_g = c('H'))
 
-summary(fb_reg_h_levels)
+etable(fb_qmle_h)
 
 ############TABLES
 
@@ -274,16 +274,32 @@ show(twfe_table)
 
 kableExtra::save_kable(twfe_table, file = "../output/regression_tables/twfe_qmle.tex")
 
-fb_models <- list('Inverse Hyperbolic Sine' = fb_asinh,
-                  'Levels (USD equivalent)' = fb_levels)
+######FOREIGN-BORN TABLES
+
+#collect models
+
+fb_models <- list('All Destinations' = fb_qmle_all,
+                  'Low-Income' = fb_qmle_l,
+                  'Middle-Income' = fb_qmle_m,
+                  'High-Income' = fb_qmle_h)
+
+cmap_fb <- c('disbursed::1:log(fb1)' = '$\\text{disbursed} \\times log(\\text{FB})$')
+
+gof_fb <- tribble(~raw, ~clean, ~fmt,
+                     "nobs", "$\\text{Observations}$", "%.0f",
+                     "r.squared", "$R^{2}$", "%.2f",
+                     "adj.r.squared", "$R^{2} Adj.$", "%.2f",
+                     "FE: user_cc2", "Receiving Country FE", "%.4f",
+                     "FE: time", "Week FE", "%.4f")
+
+note_fb <- 'Standard errors clustered at the receiving country level.'
 
 fb_table <- modelsummary(fb_models,
                          stars = TRUE,
-                         shape = 'rbind',
-                         coef_map = fb_map,
-                         # gof_omit = gof_omitted,
-                         gof_map = gm_spillovers,
-                         title = 'Dependent Variable: US Cryptocurrency Outflows',
+                         coef_map = cmap_fb,
+                         gof_omit = gof_omitted,
+                         gof_map = gof_fb,
+                         title = 'Poisson QMLE–Dependent Variable: US Cryptocurrency Outflows',
                          escape = FALSE,
                          output = 'latex') %>%
   add_footnote(note_fb, threeparttable = TRUE)
@@ -291,33 +307,6 @@ fb_table <- modelsummary(fb_models,
 show(fb_table)
 
 kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.tex')
-
-#####Table with no panels
-#spillovers
-
-spillovers_models_no_panel <- list('Levels (USD)' = did_all_levels,
-                                   'Inverse Hyperbolic Sine' = did_all_asinh,
-                                   'Levels (USD)' = did_lm_levels,
-                                   'Inverse Hyperbolic Sine' = did_lm_asinh,
-                                   'Levels (USD)' = did_um_levels,
-                                   'Inverse Hyperbolic Sine' = did_um_asinh)
-
-spillovers_table_no_panel <- modelsummary(spillovers_models_no_panel,
-                                          stars = TRUE,
-                                          coef_map = spillovers_map,
-                                          gof_moit = gof_omitted,
-                                          gof_map = gm_spillovers,
-                                          title = "Dependent Variable: Cryptocurrency Outflows",
-                                          escape = FALSE,
-                                          output = 'latex') %>%
-  add_header_above(c(" " = 1, "Full Sample" = 2, "Low and Lower-Middle Income" = 2, "Upper-Middle and High Income" = 2)) %>%
-  add_footnote(note_spillovers, threeparttable = TRUE)
-
-show(spillovers_table_no_panel)
-
-kableExtra::save_kable(spillovers_table_no_panel, file = '../output/regression_tables/spillovers_no_panel.tex')
-
-#foreign-born
 
 ####EVENT STUDY GRAPHS
 
@@ -328,32 +317,60 @@ names(es_qmle) <- model_names
 names(es_qmle_highincome) <- model_names
 names(es_qmle_oecd) <- model_names
 
-es_plot <- function(es_model, title){
-  ggiplot(es_model, geom_style = "errorbar", ylab = 'Estimate', main = title, multi_style = "dodge") + 
-  theme(axis.text.x = element_text(angle = 90, vjust = .5))
+es_plot <- function(es_model, title, filename){
+  
+  plot <- ggiplot(es_model,
+                  geom_style = "errorbar",
+                  ylab = 'Estimate',
+                  main = title,
+                  multi_style = "dodge") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = .5, size = 13),
+        legend.text = element_text(size = 16),
+        axis.title = element_text(size = 13),
+        plot.title = element_text(size = 20))
+  
+  #save plot
+  filepath = paste('../output/event_study_plots/', filename, '.png', sep = '')
+  ggsave(filepath, plot, width = 11, height = 8, dpi = 300)
+  
+  return(plot)
 }
 
-es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Sample: All Destinations")
+es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Sample: All Destinations",
+                            filename = 'es_qmle_fullcontrol_all')
 
 show(es_qmle_plot_all)
 
-es_qmle_plot_split <- es_plot(list("Middle-Income Destinations" = es_qmle[3],"High-Income Destinations" = es_qmle[4]), title = "Full Sample: By Destination Income Group")
+es_qmle_plot_split <- es_plot(list("Middle-Income Destinations" = es_qmle[[3]],
+                                   "High-Income Destinations" = es_qmle[[4]]),
+                              title = "Full Sample: By Destination Income Group",
+                              filename = "es_qmle_fullcontrol_split")
 
 show(es_qmle_plot_split)
 
-es_qmle_plot_all_highincome <- es_plot(es_qmle_highincome[[1]], title = "High Income Sample: All Destinations")
+es_qmle_plot_all_highincome <- es_plot(es_qmle_highincome[[1]],
+                                       title = "High Income Sample: All Destinations",
+                                       filename = 'es_qmle_highincome_all')
 
 show(es_qmle_plot_all_highincome)
 
-es_qmle_plot_split_highincome <- es_plot(list("Middle-Income Destinations" = es_qmle_highincome[[3]], "High-Income Destinations" = es_qmle_highincome[[4]]), title = "High Income Sample: By Destination Income Group")
+es_qmle_plot_split_highincome <- es_plot(list("Middle-Income Destinations" = es_qmle_highincome[[3]],
+                                              "High-Income Destinations" = es_qmle_highincome[[4]]),
+                                         title = "High Income Sample: By Destination Income Group",
+                                         filename = 'es_qmle_highincome_split')
 
 show(es_qmle_plot_split_highincome)
 
-es_qmle_plot_all_oecd <- es_plot(es_qmle_oecd[[1]], title = "OECD Sample: All Destinations")
+es_qmle_plot_all_oecd <- es_plot(es_qmle_oecd[[1]],
+                                 title = "OECD Sample: All Destinations",
+                                 filename = 'es_qmle_oecd_all')
 
 show(es_qmle_plot_all_oecd)
 
-es_qmle_plot_split_oecd <- es_plot(list("Middle-Income Destinations" = es_qmle_oecd[[3]], "High-Income Destinations" = es_qmle_oecd[[4]]), title = "OECD Sample: By Destination Income Group")
+es_qmle_plot_split_oecd <- es_plot(list("Middle-Income Destinations" = es_qmle_oecd[[3]],
+                                        "High-Income Destinations" = es_qmle_oecd[[4]]),
+                                   title = "OECD Sample: By Destination Income Group",
+                                   filename = 'es_qmle_oecd_split')
 
 show(es_qmle_plot_split_oecd)
 
