@@ -153,6 +153,7 @@ did_levels_controls <- outflows_joined %>%
   feols(.[did_yvars] ~ disbursed*us_outflow + .[baseline_controls], cluster = cluster_level_spillovers)
   
 etable(did_levels_controls)
+
 ####EVENTSTUDY
 
 es_levels <- outflows_joined %>%
@@ -373,6 +374,52 @@ es_qmle_plot_split_oecd <- es_plot(list("Middle-Income Destinations" = es_qmle_o
                                    filename = 'es_qmle_oecd_split')
 
 show(es_qmle_plot_split_oecd)
+
+############ROBUSTNESS
+
+
+###extend time window
+
+##using only high-income sample
+
+window_end <- as.Date('2020-07-07')
+
+twfe_1_month <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(twfe_fml, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(twfe_1_month)
+
+window_end <- as.Date('2020-08-07')
+
+twfe_2_month <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(twfe_fml, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(twfe_2_month)
+
+window_end <- as.Date('2020-09-07')
+
+twfe_3_month <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(twfe_fml, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(twfe_3_month)
+
+window_end <- as.Date('2021-01-01')
+
+twfe_yearend <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(twfe_fml, cluster = cluster_level_spillovers, family = quasipoisson)
+
+etable(twfe_yearend)
+
+###use inflows as placebo
+
 
 
 ####Show flows with US vs. Non-US
