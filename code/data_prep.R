@@ -76,10 +76,15 @@ total_volume <- trades %>%
 us_outflows <- flows_balanced %>%
   filter(user_cc == "US" & user_cc2 != "US")
 
+#####US inflows
+us_inflows <- flows_balanced %>%
+  filter(user_cc != 'US' & user_cc2 == 'US')
+
 
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
 write.csv(us_outflows, '../temporary/us_outflows_balanced.csv', row.names = FALSE)
+write.csv(us_inflows, '../temporary/us_inflows_balanced.csv', row.names = FALSE)
 write.csv(shares_wide, '../temporary/baseline_shares.csv', row.names = FALSE)
 write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)

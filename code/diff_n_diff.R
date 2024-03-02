@@ -420,6 +420,54 @@ etable(twfe_yearend)
 
 ###use inflows as placebo
 
+window_end <- as.Date('2020-06-07')
+
+inflows_all <- flows %>%
+  group_by(user_cc2, time) %>%
+  summarize(volume_all = sum(volume))
+
+inflows_l <- flows %>%
+  select(user_cc, user_cc2, time, volume) %>%
+  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+  filter(income_group %in% c('L')) %>%
+  group_by(user_cc2, time) %>%
+  summarize(volume_l = sum(volume))
+
+inflows_m <- flows %>%
+  select(user_cc, user_cc2, time, volume) %>%
+  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+  filter(income_group %in% c('LM', 'UM')) %>%
+  group_by(user_cc2, time) %>%
+  summarize(volume_m = sum(volume))
+
+inflows_h <- flows %>%
+  select(user_cc, user_cc2, time, volume) %>%
+  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+  filter(income_group %in% c('H')) %>%
+  group_by(user_cc2, time) %>%
+  summarize(volume_h = sum(volume))
+
+inflows_joined <- list(inflows_all, inflows_l, inflows_m, inflows_h) %>%
+  reduce(left_join, by = c('user_cc2', 'time')) %>%
+  left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc2' = 'alpha.2')) %>%
+  mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+         disbursed = ifelse(time >= disbursement, 1, 0),
+         us_inflow = ifelse(user_cc2 == "US", 1, 0)
+  )
+
+twfe_inflows_highincome <- inflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars] ~ disbursed*us_inflow, cluster = c('user_cc2'), family = quasipoisson())
+
+etable(twfe_inflows_highincome)
+
+es_inflows_highincome <- inflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(volume_h ~ i(time, us_inflow, ref = '2020-04-05')|time + user_cc2, cluster = c('user_cc2'), family = quasipoisson)
+
+iplot(es_inflows_highincome)
 
 
 ####Show flows with US vs. Non-US
