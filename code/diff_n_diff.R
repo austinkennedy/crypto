@@ -15,8 +15,13 @@ library(ggiplot)
 
 source('functions.R')
 
+##uncomment to run daily results
+flows <- vroom('../temporary/bilateral_flows_balanced_daily.csv')
+
 ####Load Data
-flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+# flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+
+
 outflows <- vroom('../temporary/outflows_balanced.csv')
 outflows_us <- vroom('../temporary/us_outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')

@@ -80,9 +80,26 @@ us_outflows <- flows_balanced %>%
 us_inflows <- flows_balanced %>%
   filter(user_cc != 'US' & user_cc2 == 'US')
 
+###daily outflows
+flows_daily <- getFlows(trades_matched, amount_usd, 'day') %>% na.omit() %>%
+  filter(time >= as.Date('2020-01-01') & time <= as.Date('2021-01-01'))
+
+flows_daily_balanced <- balanceFlows(flows_daily)
+
+flows_daily_balanced <- flows_daily_balanced %>%
+  left_join(country_data[, c('alpha.2', 'income_group')], by = c('user_cc2' = 'alpha.2'))
+
+# outflows_daily <- flows_daily_balanced %>%
+#   filter(user_cc != user_cc2) %>%
+#   group_by(user_cc, time) %>%
+#   summarize(outflow = sum(volume))
+# 
+# outflows_daily <- outflows_daily %>%
+#   left_join(country_data, by = c('user_cc2' = 'alpha.2'))
 
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
+write.csv(flows_daily_balanced, '../temporary/bilateral_flows_balanced_daily.csv', row.names = FALSE)
 write.csv(us_outflows, '../temporary/us_outflows_balanced.csv', row.names = FALSE)
 write.csv(us_inflows, '../temporary/us_inflows_balanced.csv', row.names = FALSE)
 write.csv(shares_wide, '../temporary/baseline_shares.csv', row.names = FALSE)
