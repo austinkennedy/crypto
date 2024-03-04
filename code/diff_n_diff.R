@@ -418,6 +418,33 @@ twfe_yearend <- outflows_joined %>%
 
 etable(twfe_yearend)
 
+###table
+
+names(twfe_1_month) <- model_names
+names(twfe_2_month) <- model_names
+names(twfe_3_month) <- model_names
+names(twfe_yearend) <- model_names
+
+extended_models <- list('1 Month' = twfe_1_month,
+                        '2 Months' = twfe_2_month,
+                        '3 Months' = twfe_3_month,
+                        'Year End' = twfe_yearend)
+
+extended_table <- modelsummary(extended_models,
+                           stars = TRUE,
+                           shape = 'rbind',
+                           coef_map = cmap_twfe,
+                           gof_map = gm_twfe,
+                           gof_omit = gof_omitted,
+                           title = "Poisson QMLE–Dependent Variable: Cryptocurrency Outflows",
+                           escape = FALSE,
+                           output = 'latex') %>%
+  add_footnote(note_twfe, threeparttable = TRUE)
+
+show(extended_table)
+
+kableExtra::save_kable(extended_table, file = "../output/regression_tables/extended_models.tex")
+
 ###use inflows as placebo
 
 window_end <- as.Date('2020-06-07')
@@ -458,7 +485,7 @@ inflows_joined <- list(inflows_all, inflows_l, inflows_m, inflows_h) %>%
 twfe_inflows_highincome <- inflows_joined %>%
   filter(time >= window_start & time <= window_end,
          income_group == 'H') %>%
-  feglm(.[did_yvars] ~ disbursed*us_inflow, cluster = c('user_cc2'), family = quasipoisson())
+  feglm(.[did_yvars] ~ disbursed*us_inflow|user_cc2 + time, cluster = c('user_cc2'), family = quasipoisson())
 
 etable(twfe_inflows_highincome)
 
@@ -468,6 +495,34 @@ es_inflows_highincome <- inflows_joined %>%
   feglm(volume_h ~ i(time, us_inflow, ref = '2020-04-05')|time + user_cc2, cluster = c('user_cc2'), family = quasipoisson)
 
 iplot(es_inflows_highincome)
+
+###table for inflows
+
+cmap_inflows <- c('disbursed:us_inflow' = '$\\text{disbursed} \\times \\text{US}$')
+
+names(twfe_inflows_highincome) <- model_names
+
+gm_inflows <- tribble(~raw, ~clean, ~fmt,
+                   "nobs", "$\\text{Observations}$", "%.0f",
+                   "r.squared", "$R^{2}$", "%.2f",
+                   "adj.r.squared", "$R^{2} Adj.$", "%.2f",
+                   "FE: user_cc2", "Country FE", "%.4f",
+                   "FE: time", "Week FE", "%.4f")
+
+inflows_table <- modelsummary(twfe_inflows_highincome,
+                              stars = TRUE,
+                              coef_map = cmap_inflows,
+                              gof_map = gm_inflows,
+                              gof_omit = gof_omitted,
+                              title = "Poisson QMLE–Dependent Variable: Cryptocurrency Inflows",
+                              escape = FALSE,
+                              output = 'latex') %>%
+  add_footnote(note_twfe, threeparttable = TRUE)
+
+show(inflows_table)
+
+kableExtra::save_kable(inflows_table, file = "../output/regression_tables/inflows_table.tex")
+
 
 
 ####Show flows with US vs. Non-US
