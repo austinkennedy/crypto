@@ -16,10 +16,10 @@ library(ggiplot)
 source('functions.R')
 
 ##uncomment to run daily results
-flows <- vroom('../temporary/bilateral_flows_balanced_daily.csv')
+# flows <- vroom('../temporary/bilateral_flows_balanced_daily.csv')
 
 ####Load Data
-# flows <- vroom('../temporary/bilateral_flows_balanced.csv')
+flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 
 
 outflows <- vroom('../temporary/outflows_balanced.csv')
@@ -236,14 +236,14 @@ etable(fb_qmle_h)
 
 #WITH PANELS
 
-model_names <- c("All Destinations", "Low Income", "Middle Income", "High Income")
+model_names <- c("All Destinations", "Low-Income", "Middle-Income", "High-Income")
 
 names(twfe_qmle) <- model_names
 names(twfe_qmle_highincome) <- model_names
 names(twfe_qmle_oecd) <- model_names
 
 twfe_models <- list('Full Control Group' = twfe_qmle,
-                   'Control Group: High Income Countries Only' = twfe_qmle_highincome,
+                   'Control Group: High-Income Countries Only' = twfe_qmle_highincome,
                    'Control Group: OECD Countries Only' = twfe_qmle_oecd)
 
 cmap_twfe <- c('(Intercept)' = '$(\\text{Intercept})$',
@@ -266,7 +266,7 @@ gm_twfe <- tribble(~raw, ~clean, ~fmt,
                   "FE: time", "Week FE", "%.4f")
 
 twfe_table <- modelsummary(twfe_models,
-                          stars = TRUE,
+                          stars = c('*' = .1, '**' = 0.05, '***' = 0.01),
                           shape = 'rbind',
                           coef_map = cmap_twfe,
                           gof_map = gm_twfe,
@@ -315,70 +315,7 @@ show(fb_table)
 kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.tex')
 
 ####EVENT STUDY GRAPHS
-
-#change names of models
-names(es_levels) <- model_names
-
-names(es_qmle) <- model_names
-names(es_qmle_highincome) <- model_names
-names(es_qmle_oecd) <- model_names
-
-es_plot <- function(es_model, title, filename){
-  
-  plot <- ggiplot(es_model,
-                  geom_style = "errorbar",
-                  ylab = 'Estimate',
-                  main = title,
-                  multi_style = "dodge") + 
-  theme(axis.text.x = element_text(angle = 90, vjust = .5, size = 13),
-        legend.text = element_text(size = 16),
-        axis.title = element_text(size = 13),
-        plot.title = element_text(size = 20))
-  
-  #save plot
-  filepath = paste('../output/event_study_plots/', filename, '.png', sep = '')
-  ggsave(filepath, plot, width = 11, height = 8, dpi = 300)
-  
-  return(plot)
-}
-
-es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Sample: All Destinations",
-                            filename = 'es_qmle_fullcontrol_all')
-
-show(es_qmle_plot_all)
-
-es_qmle_plot_split <- es_plot(list("Middle-Income Destinations" = es_qmle[[3]],
-                                   "High-Income Destinations" = es_qmle[[4]]),
-                              title = "Full Sample: By Destination Income Group",
-                              filename = "es_qmle_fullcontrol_split")
-
-show(es_qmle_plot_split)
-
-es_qmle_plot_all_highincome <- es_plot(es_qmle_highincome[[1]],
-                                       title = "High Income Sample: All Destinations",
-                                       filename = 'es_qmle_highincome_all')
-
-show(es_qmle_plot_all_highincome)
-
-es_qmle_plot_split_highincome <- es_plot(list("Middle-Income Destinations" = es_qmle_highincome[[3]],
-                                              "High-Income Destinations" = es_qmle_highincome[[4]]),
-                                         title = "High Income Sample: By Destination Income Group",
-                                         filename = 'es_qmle_highincome_split')
-
-show(es_qmle_plot_split_highincome)
-
-es_qmle_plot_all_oecd <- es_plot(es_qmle_oecd[[1]],
-                                 title = "OECD Sample: All Destinations",
-                                 filename = 'es_qmle_oecd_all')
-
-show(es_qmle_plot_all_oecd)
-
-es_qmle_plot_split_oecd <- es_plot(list("Middle-Income Destinations" = es_qmle_oecd[[3]],
-                                        "High-Income Destinations" = es_qmle_oecd[[4]]),
-                                   title = "OECD Sample: By Destination Income Group",
-                                   filename = 'es_qmle_oecd_split')
-
-show(es_qmle_plot_split_oecd)
+ 
 
 ############ROBUSTNESS
 
