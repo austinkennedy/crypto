@@ -15,7 +15,6 @@ flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
- 
 ####US outflows graph
 
 stimulus_1 <- ymd('2020-04-12')
@@ -277,7 +276,53 @@ show(country_pair_graph)
 
 ggsave('../output/descriptive_graphs/country_pairs.png', width = 11, height = 6, dpi = 300)
 
+######migrants and US outflows
+us_outflows_2019 <- getFlows(matched_trades, amount_usd, 'year') %>%
+  filter(user_cc != user_cc2,
+         time == '2019-01-01',
+         user_cc == 'US') %>%
+  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
 
+mod <- lm(log(volume)~log(fb1), us_outflows_2019)
+coefs <- coef(mod)
+
+migrant_us_flows_graph <- us_outflows_2019 %>%
+  ggplot(aes(y = log(volume), x = log(fb1))) +
+  geom_point() + 
+  geom_smooth(method = 'lm',
+              formula = y~x) +
+  geom_text(x = 10.5, y = 16,
+            label = paste('coefficient = ', round(coefs[2], 2)),
+            size = 5) +
+  ylab("Ln(Cryptocurrency Inflows from United States, 2019)") +
+  xlab("Ln(Foreign Born Population in US)") +
+  theme_bw()
+
+show(migrant_us_flows_graph)
+
+ggsave('../output/descriptive_graphs/fb_usoutflows.png', width = 11, height = 6, dpi = 300)
+
+####migration shares
+country_data <- country_data %>%
+  mutate(fb_share = fb1/sum(fb1, na.rm = TRUE))
+
+migrant_shares_chart <- country_data %>%
+  slice_max(fb_share, n = 20) %>%
+  ggplot(aes(x=reorder(label, fb_share), y = fb_share, fill = factor(income_group))) + 
+  geom_bar(stat = 'identity') +
+  xlab("") +
+  ylab("Share of Total Foreign Born Population") +
+  coord_flip() +
+  scale_fill_viridis_d(option = "D", direction = -1, name = "Income Group", breaks = c('H', 'UM', 'LM', 'L'),
+                       labels = c('High', 'Upper-Middle', 'Lower-Middle', 'Low')) +
+  # scale_fill_discrete(breaks = c('H', 'UM', 'LM', 'L'),
+  #                     labels = c('High', 'Upper-Middle', 'Lower-Middle', 'Low'))+
+  # scale_fill_brewer(palette = "GnBu") +
+  theme_bw()
+
+show(migrant_shares_chart)
+
+ggsave('../output/descriptive_graphs/migrant_shares.png', width = 11, height = 6, dpi = 300)
 
 ######US crypto exports 
  

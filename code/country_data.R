@@ -153,6 +153,8 @@ country_data <- country_data %>%
 
 country_data$label[country_data$alpha.2 == "US"] <- "United States"
 country_data$label[country_data$alpha.2 == "GB"] <- "United Kingdom"
+country_data$label[country_data$alpha.2 == "VE"] <- "Venezuela"
+country_data$label[country_data$alpha.2 == "KR"] <- "South Korea"
 
 #oecd data
 
