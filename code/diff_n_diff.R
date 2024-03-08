@@ -146,12 +146,11 @@ did_qmle_controls_oecd <- outflows_joined %>%
 
 etable(did_qmle_controls_oecd)
 
-twfe_levels_oecd <- outflows_joined %>%
-  filter(time >= window_start & time <= window_end,
-         oecd == 1) %>%
-  feols(twfe_fml, cluster = cluster_level_spillovers)
+did_levels <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end) %>%
+  feols(.[did_yvars] ~ disbursed*us_outflow, cluster = cluster_level_spillovers)
 
-etable(twfe_levels_oecd)
+etable(did_levels)
 
 did_levels_controls <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%

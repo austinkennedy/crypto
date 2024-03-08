@@ -296,11 +296,12 @@ migrant_us_flows_graph <- us_outflows_2019 %>%
             size = 5) +
   ylab("Ln(Cryptocurrency Inflows from United States, 2019)") +
   xlab("Ln(Foreign Born Population in US)") +
-  theme_bw()
+  theme_bw() +
+  theme(axis.title = element_text(size = 15))
 
 show(migrant_us_flows_graph)
 
-ggsave('../output/descriptive_graphs/fb_usoutflows.png', width = 11, height = 6, dpi = 300)
+ggsave('../output/descriptive_graphs/fb_usoutflows.png', plot = migrant_us_flows_graph, width = 8, height = 6, dpi = 300)
 
 ####migration shares
 country_data <- country_data %>%
@@ -315,10 +316,9 @@ migrant_shares_chart <- country_data %>%
   coord_flip() +
   scale_fill_viridis_d(option = "D", direction = -1, name = "Income Group", breaks = c('H', 'UM', 'LM', 'L'),
                        labels = c('High', 'Upper-Middle', 'Lower-Middle', 'Low')) +
-  # scale_fill_discrete(breaks = c('H', 'UM', 'LM', 'L'),
-  #                     labels = c('High', 'Upper-Middle', 'Lower-Middle', 'Low'))+
-  # scale_fill_brewer(palette = "GnBu") +
-  theme_bw()
+  theme_bw()+
+  theme(axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 11))
 
 show(migrant_shares_chart)
 
