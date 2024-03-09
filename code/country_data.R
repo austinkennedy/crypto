@@ -163,6 +163,11 @@ country_data <- country_data %>%
   left_join(oecd, by = c("alpha.3" = "Code")) %>%
   mutate(oecd = ifelse(!is.na(Accession), 1, 0)) %>%
   select(-c(Name, Accession))
+
+#foreign-born quantiles
+
+country_data <- country_data %>%
+  mutate(quantile = ntile(fb1, 4))
  
 
 

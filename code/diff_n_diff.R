@@ -595,3 +595,57 @@ fees_threshold <- outflows_us %>%
 
 etable(fees_threshold)
 
+
+#########FB DID
+
+outflows_q1 <- flows %>%
+  filter(quantile == 1) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q1 = sum(volume))
+
+outflows_q2 <- flows %>%
+  filter(quantile == 2) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q2 = sum(volume))
+
+outflows_q3 <- flows %>%
+  filter(quantile == 3) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q3 = sum(volume))
+
+outflows_q4 <- flows %>%
+  filter(quantile == 4) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q4 = sum(volume))
+
+outflows_q <- list(outflows_q1, outflows_q2, outflows_q3, outflows_q4) %>%
+  reduce(left_join, by = c("user_cc", "time")) %>%
+  left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
+  mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+         disbursed = ifelse(time >= disbursement, 1, 0),
+         us_outflow = ifelse(user_cc == "US", 1, 0)
+  )
+
+did_yvars_q <- c('volume_q1', 'volume_q2', 'volume_q3', 'volume_q4')
+
+twfe_qmle_q <- outflows_q %>%
+  filter(time >= window_start & time <= window_end,
+        income_group == 'H') %>%
+  feglm(.[did_yvars_q]~disbursed*us_outflow|user_cc + time, cluster = cluster_level_spillovers, family = quasipoisson())
+
+etable(twfe_qmle_q)
+
+es_q <- outflows_q %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars_q] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+iplot(es_q)
+
+ggiplot(es_q)
+
+
+
+
+
+

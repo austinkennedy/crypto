@@ -33,7 +33,9 @@ data[is.na(data)] <- 0
 
 data_cut <- data %>%
   filter(time >= window_start & time <= window_end) %>%
-  mutate(outflow_log = log(outflow))
+  mutate(outflow_log = log(outflow)) %>%
+  left_join(country_data, by = c('user_cc'='alpha.2')) %>%
+  drop_na(label)
 
 ##Synthetic Control
 
@@ -98,20 +100,36 @@ data_cut <- data %>%
 #Synthdid setup
 
 setup = panel.matrices(as.data.frame(data_cut),
-                       unit = 'user_cc',
+                       unit = 'label',
                        time = 'time',
                        outcome = 'outflow',
                        treatment = 'treated')
   
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
 sprintf('point estimate: %1.2f', tau.hat)
-synthdid_plot(tau.hat, overlay = 1)
-synthdid_plot(tau.hat, overlay = 0 )
+
+sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+ggsave('../output/sdid_plots/sdid_main_plot.png', plot = sdid_main_plot, width = 9, height = 6, dpi = 300)
+ggsave('../output/sdid_plots/sdid_overlaid_plot.png', plot = sdid_overlaid_plot, width = 9, height = 6, dpi = 300)
+
+top.controls = synthdid_controls(tau.hat)[1:8, , drop=FALSE]
+
+control_plot <- synthdid_units_plot(tau.hat, units = row.names(top.controls)) + ylab('Estimate')+ theme(strip.text = element_blank())
+
+ggsave('../output/sdid_plots/control_plot.png', plot = control_plot, width = 11, height = 6, dpi = 300)
+
+baseline_outflows_us <- data_cut %>%
+  filter(user_cc == 'US',
+         treated == 0) %>%
+  summarize(mean(outflow))
 
 se = sqrt(vcov(tau.hat, method='placebo'))
+sprintf('SE: (%1.2f)', se)
 sprintf('95%% CI (%1.2f, %1.2f)', tau.hat - 1.96 * se, tau.hat + 1.96 * se)
 
-synthdid_units_plot(tau.hat)
 
 synthdid_units_plot(
   tau.hat,
