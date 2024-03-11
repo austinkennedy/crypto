@@ -31,7 +31,7 @@ baseline_shares <- read.csv('../temporary/baseline_shares.csv')
 #add phases
 announcement <- as.Date('2020-03-27')
 
-disbursement <- as.Date('2020-04-09')
+disbursement <- as.Date('2020-04-05')
 
 window_start <- as.Date('2020-01-01')
 window_end <- as.Date('2020-06-07')
@@ -164,76 +164,82 @@ etable(did_levels_controls)
 
 ####EVENTSTUDY
 
+reference_period <- '2020-03-29'
+
 es_levels <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feols(.[did_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
+  feols(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers)
 
 iplot(es_levels)
 
 es_levels_oecd<- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
-  feols(.[did_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers)
+  feols(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers)
 
 iplot(es_levels_oecd)
 
 es_qmle <- outflows_joined %>%
   filter(time >= window_start & time <= window_end) %>%
-  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
 iplot(es_qmle)
 
 es_qmle_oecd <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          oecd == 1) %>%
-  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
 iplot(es_qmle_oecd)
 
 es_qmle_highincome <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          income_group == 'H') %>%
-  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-04-05')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
 iplot(es_qmle_highincome)
 
-##########US-only outflows
+##########FB regs
 
-#add announced and disbursed variables
 
-outflows_us <- outflows_us %>% mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-       disbursed = ifelse(time >= disbursement, 1, 0))
+outflows_q1 <- flows %>%
+  filter(quantile == 1) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q1 = sum(volume))
 
-#Create lm and um datasets
+outflows_q2 <- flows %>%
+  filter(quantile == 2) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q2 = sum(volume))
 
-# us_outflows_lm <- us_outflows_country %>% filter(income_group %in% c('L', 'LM'))
-# 
-# us_outflows_um <- us_outflows_country %>% filter(income_group %in% c('UM', 'H'))
+outflows_q3 <- flows %>%
+  filter(quantile == 3) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q3 = sum(volume))
 
-fb_model <- function(df, yvar, income_g){
-  reg <- df %>%
-    filter(time >= window_start & time <= window_end,
-           income_group %in% income_g) %>%
-    feglm(.[yvar] ~ i(disbursed, log(fb1), ref = 0)|time + user_cc2,
-          cluster = c('user_cc2'), family = quasipoisson)
-  
-}
+outflows_q4 <- flows %>%
+  filter(quantile == 4) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume_q4 = sum(volume))
 
-fb_qmle_all <- fb_model(outflows_us, yvar = 'volume', income_g = c('L', 'LM', 'UM', 'H'))
+outflows_q <- list(outflows_q1, outflows_q2, outflows_q3, outflows_q4) %>%
+  reduce(left_join, by = c("user_cc", "time")) %>%
+  left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
+  mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+         disbursed = ifelse(time >= disbursement, 1, 0),
+         us_outflow = ifelse(user_cc == "US", 1, 0)
+  )
 
-etable(fb_qmle_all)
+did_yvars_q <- c('volume_q1', 'volume_q2', 'volume_q3', 'volume_q4')
 
-fb_qmle_l <- fb_model(outflows_us, yvar = 'volume', income_g = c('L'))
+twfe_qmle_q <- outflows_q %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars_q]~disbursed*us_outflow|user_cc + time, cluster = cluster_level_spillovers, family = quasipoisson())
 
-etable(fb_qmle_l)
+etable(twfe_qmle_q)
 
-fb_qmle_m <- fb_model(outflows_us, yvar = 'volume', income_g = c('LM', 'UM'))
 
-etable(fb_qmle_m)
-
-fb_qmle_h <- fb_model(outflows_us, yvar = 'volume', income_g = c('H'))
-
-etable(fb_qmle_h)
 
 ############TABLES
 
@@ -288,30 +294,25 @@ kableExtra::save_kable(twfe_table, file = "../output/regression_tables/twfe_qmle
 
 ######FOREIGN-BORN TABLES
 
-#collect models
+names(twfe_qmle_q) <- c('Lowest Quartile', 'Second Quartile', 'Third Quartile', 'Highest Quartile')
 
-fb_models <- list('All Destinations' = fb_qmle_all,
-                  'Low-Income' = fb_qmle_l,
-                  'Middle-Income' = fb_qmle_m,
-                  'High-Income' = fb_qmle_h)
-
-cmap_fb <- c('disbursed::1:log(fb1)' = '$\\text{disbursed} \\times ln(\\text{FB})$')
+cmap_fb <- c('disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$')
 
 gof_fb <- tribble(~raw, ~clean, ~fmt,
                      "nobs", "$\\text{Observations}$", "%.0f",
                      "r.squared", "$R^{2}$", "%.2f",
                      "adj.r.squared", "$R^{2} Adj.$", "%.2f",
-                     "FE: user_cc2", "Receiving Country FE", "%.4f",
+                     "FE: user_cc", "Country FE", "%.4f",
                      "FE: time", "Week FE", "%.4f")
 
-note_fb <- 'Standard errors clustered at the receiving country level.'
+note_fb <- 'Standard errors clustered at the country level. Columns refer to the outflows destined for countries depending on their level of foreign-born residents in the US, adjusted for their population, and split into quartiles.'
 
-fb_table <- modelsummary(fb_models,
+fb_table <- modelsummary(twfe_qmle_q,
                          stars = star_map,
                          coef_map = cmap_fb,
                          gof_omit = gof_omitted,
                          gof_map = gof_fb,
-                         title = 'Poisson QMLE–Dependent Variable: US Cryptocurrency Outflows',
+                         title = 'Poisson QMLE–Dependent Variable: Cryptocurrency Outflows',
                          escape = FALSE,
                          output = 'latex') %>%
   add_footnote(note_fb, threeparttable = TRUE)
@@ -335,7 +336,8 @@ es_plot <- function(es_model, title, filename){
                   geom_style = "errorbar",
                   ylab = 'Estimate',
                   main = title,
-                  multi_style = "dodge") + 
+                  multi_style = "dodge",
+                  ref.line = '2020-04-05') + 
     theme(axis.text.x = element_text(angle = 90, vjust = .5, size = 13),
           axis.text.y = element_text(size = 13),
           legend.text = element_text(size = 16),
@@ -528,9 +530,9 @@ etable(twfe_inflows_highincome)
 es_inflows_highincome <- inflows_joined %>%
   filter(time >= window_start & time <= window_end,
          income_group == 'H') %>%
-  feglm(volume_h ~ i(time, us_inflow, ref = '2020-04-05')|time + user_cc2, cluster = c('user_cc2'), family = quasipoisson)
+  feglm(volume_m ~ i(time, us_inflow, ref = '2020-04-05')|time + user_cc2, cluster = c('user_cc2'), family = quasipoisson)
 
-iplot(es_inflows_highincome)
+iplot(es_inflows_highincome) 
 
 ###table for inflows
 
