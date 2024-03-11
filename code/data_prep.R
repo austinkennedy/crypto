@@ -24,8 +24,7 @@ flows <- getFlows(trades_matched, amount_usd, 'week') %>% na.omit()
 flows_balanced <- balanceFlows(flows)
 
 #join country data
-flows_balanced <- flows_balanced %>%
-  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
+flows_balanced <- flows_balanced
 
 #aggregate into total outflows, by origin country & time
 
@@ -85,9 +84,6 @@ flows_daily <- getFlows(trades_matched, amount_usd, 'day') %>% na.omit() %>%
   filter(time >= as.Date('2020-01-01') & time <= as.Date('2021-01-01'))
 
 flows_daily_balanced <- balanceFlows(flows_daily)
-
-flows_daily_balanced <- flows_daily_balanced %>%
-  left_join(country_data[, c('alpha.2', 'income_group')], by = c('user_cc2' = 'alpha.2'))
 
 # outflows_daily <- flows_daily_balanced %>%
 #   filter(user_cc != user_cc2) %>%

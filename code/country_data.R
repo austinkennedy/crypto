@@ -167,7 +167,7 @@ country_data <- country_data %>%
 #foreign-born quantiles
 
 country_data <- country_data %>%
-  mutate(quantile = ntile(fb1, 4))
+  mutate(quantile = ntile(fb1_per1000 , 4))
  
 
 

@@ -283,14 +283,14 @@ us_outflows_2019 <- getFlows(matched_trades, amount_usd, 'year') %>%
          user_cc == 'US') %>%
   left_join(country_data, by = c('user_cc2' = 'alpha.2'))
 
-mod <- lm(log(volume)~log(fb1), us_outflows_2019)
+mod <- lm(log(volume)~log(fb1_per1000), us_outflows_2019)
 coefs <- coef(mod)
 
 migrant_us_flows_graph <- us_outflows_2019 %>%
-  ggplot(aes(y = log(volume), x = log(fb1))) +
+  ggplot(aes(y = log(volume), x = log(fb1_per1000))) +
   geom_point() + 
   geom_smooth(method = 'lm',
-              formula = y~x) +
+              formula = y~x+I(x^2)) +
   geom_text(x = 10.5, y = 16,
             label = paste('coefficient = ', round(coefs[2], 2)),
             size = 5) +

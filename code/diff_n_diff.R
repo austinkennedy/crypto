@@ -43,7 +43,14 @@ outflows_us <- outflows_us %>%
   filter(!user_cc2 %in% treated_countries)
 
 flows <- flows %>%
-  filter(!user_cc %in% treated_countries)
+  filter(!user_cc %in% treated_countries,
+         user_cc != user_cc2) %>%
+  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
+
+#filter out NG
+# flows <- flows %>%
+#   filter(user_cc != 'NG',
+#          user_cc2 != 'NG')
 
 
 #######################Outflows only###################
@@ -62,6 +69,16 @@ outflows_m <- flows %>%
   filter(income_group %in% c('LM','UM')) %>%
   group_by(user_cc, time) %>%
   summarize(volume_m = sum(volume))
+# 
+# outflows_lm <- flows %>%
+#   filter(income_group %in% c('LM')) %>%
+#   group_by(user_cc, time) %>%
+#   summarize(volume_lm = sum(volume))
+# 
+# outflows_um <- flows %>%
+#   filter(income_group %in% c('UM')) %>%
+#   group_by(user_cc, time) %>%
+#   summarize(volume_um = sum(volume))
 
 outflows_h <- flows %>%
   filter(income_group %in% c('H')) %>%
@@ -76,34 +93,21 @@ outflows_joined <- list(outflows_all, outflows_l, outflows_m, outflows_h) %>%
          disbursed = ifelse(time >= disbursement, 1, 0),
          us_outflow = ifelse(user_cc == "US", 1, 0)
   )
-  
-# 
-# outflows_lm <- flows %>%
-#   filter(income_group %in% c('L','LM')) %>%
-#   group_by(user_cc, time) %>%
-#   summarize(volume_lm = sum(volume))  
-# 
-# outflows_um <- flows %>%
-#   filter(income_group %in% c('UM','H')) %>%
-#   group_by(user_cc, time) %>%
-#   summarize(volume_um = sum(volume))
-# 
-# outflows_joined <- list(outflows_all, outflows_lm, outflows_um) %>%
+
+# outflows_joined <- list(outflows_all, outflows_l, outflows_lm, outflows_um, outflows_h) %>%
 #   reduce(left_join, by = c("user_cc", "time")) %>%
-#   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+#   left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
 #   left_join(baseline_shares, by = 'user_cc') %>%
 #   mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
-#        disbursed = ifelse(time >= disbursement, 1, 0),
-#        us_outflow = ifelse(user_cc == "US", 1, 0)
-# )
+#          disbursed = ifelse(time >= disbursement, 1, 0),
+#          us_outflow = ifelse(user_cc == "US", 1, 0)
+#   )
 
 
 #CLUSTERING LEVEL
 cluster_level_spillovers <- c('user_cc')
 
-# did_yvars <- c("volume_all", "volume_lm", "volume_um")
-
-did_yvars <- c('volume_all', 'volume_l', 'volume_m', 'volume_h')
+did_yvars <- names(outflows_joined)[grepl("volume_", names(outflows_joined))]
 
 twfe_fml <- as.formula('.[did_yvars] ~ disbursed*us_outflow|user_cc + time')
 
@@ -477,6 +481,20 @@ inflows_m <- flows %>%
   group_by(user_cc2, time) %>%
   summarize(volume_m = sum(volume))
 
+# inflows_lm <- flows %>%
+#   select(user_cc, user_cc2, time, volume) %>%
+#   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+#   filter(income_group %in% c('LM')) %>%
+#   group_by(user_cc2, time) %>%
+#   summarize(volume_lm = sum(volume))
+# 
+# inflows_um <- flows %>%
+#   select(user_cc, user_cc2, time, volume) %>%
+#   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
+#   filter(income_group %in% c('UM')) %>%
+#   group_by(user_cc2, time) %>%
+#   summarize(volume_um = sum(volume))
+
 inflows_h <- flows %>%
   select(user_cc, user_cc2, time, volume) %>%
   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc' = 'alpha.2')) %>%
@@ -491,6 +509,14 @@ inflows_joined <- list(inflows_all, inflows_l, inflows_m, inflows_h) %>%
          disbursed = ifelse(time >= disbursement, 1, 0),
          us_inflow = ifelse(user_cc2 == "US", 1, 0)
   )
+
+# inflows_joined <- list(inflows_all, inflows_l, inflows_lm, inflows_um, inflows_h) %>%
+#   reduce(left_join, by = c('user_cc2', 'time')) %>%
+#   left_join(country_data[, c('alpha.2', 'oecd', 'income_group')], by = c('user_cc2' = 'alpha.2')) %>%
+#   mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
+#          disbursed = ifelse(time >= disbursement, 1, 0),
+#          us_inflow = ifelse(user_cc2 == "US", 1, 0)
+#   )
 
 twfe_inflows_highincome <- inflows_joined %>%
   filter(time >= window_start & time <= window_end,
@@ -643,6 +669,33 @@ es_q <- outflows_q %>%
 iplot(es_q)
 
 ggiplot(es_q)
+
+#####net flows
+
+net_flows <- inner_join(outflows_joined, inflows_joined,
+                        by = c('user_cc' = 'user_cc2', 'time'),
+                        suffix = c('_outflows', '_inflows')) %>%
+  mutate(volume_net_all = volume_all_outflows - volume_all_inflows,
+         volume_net_l = volume_l_outflows - volume_l_inflows,
+         volume_net_m = volume_m_outflows - volume_m_inflows,
+         volume_net_h = volume_h_outflows - volume_h_inflows)
+
+net_yvars <- names(net_flows)[grepl("volume_net_", names(net_flows))]
+
+qmle_net <- net_flows %>%
+  filter(time >= window_start & time <= window_end,
+         income_group_outflows == 'H') %>%
+  feols(.[net_yvars] ~ disbursed_inflows*us_outflow|user_cc+time, cluster = c('user_cc'))
+
+etable(qmle_net)
+
+
+
+
+
+
+
+
 
 
 
