@@ -324,9 +324,10 @@ show(migrant_shares_chart)
 
 ggsave('../output/descriptive_graphs/migrant_shares.png', width = 11, height = 6, dpi = 300)
 
-######US crypto exports 
- 
+####countries in data
 
+total_volume <- total_volume %>% inner_join(country_data, by = c("user_cc" = "alpha.2"))
 
+write.csv(total_volume[, c('user_cc', 'income_group', 'label')], '../temporary/countries_by_income.csv')
 
 

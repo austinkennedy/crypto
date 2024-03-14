@@ -239,6 +239,13 @@ twfe_qmle_q <- outflows_q %>%
 
 etable(twfe_qmle_q)
 
+es_q <- outflows_q %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars_q] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+iplot(es_q)
+
 
 
 ############TABLES
@@ -351,45 +358,49 @@ es_plot <- function(es_model, title, filename){
   return(plot)
 }
 
-es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Sample: All Destinations",
+es_qmle_plot_all <- es_plot(es_qmle[[1]], title = "Full Control Group: All Destinations",
                             filename = 'es_qmle_fullcontrol_all')
 show(es_qmle_plot_all)
 es_qmle_plot_split <- es_plot(list("Middle-Income Destinations" = es_qmle[[3]],
                                    "High-Income Destinations" = es_qmle[[4]]),
-                              title = "Full Sample: By Destination Income Group",
+                              title = "Full Control Group: By Destination Income Group",
                               filename = "es_qmle_fullcontrol_split")
 show(es_qmle_plot_split)
 es_qmle_plot_all_highincome <- es_plot(es_qmle_highincome[[1]],
-                                       title = "High Income Sample: All Destinations",
+                                       title = "High Income Control Group: All Destinations",
                                        filename = 'es_qmle_highincome_all')
 show(es_qmle_plot_all_highincome)
 es_qmle_plot_split_highincome <- es_plot(list("Middle-Income Destinations" = es_qmle_highincome[[3]],
                                               "High-Income Destinations" = es_qmle_highincome[[4]]),
-                                         title = "High Income Sample: By Destination Income Group",
+                                         title = "High Income Control Group: By Destination Income Group",
                                          filename = 'es_qmle_highincome_split')
 show(es_qmle_plot_split_highincome)
 es_qmle_plot_all_oecd <- es_plot(es_qmle_oecd[[1]],
-                                 title = "OECD Sample: All Destinations",
+                                 title = "OECD Control Group: All Destinations",
                                  filename = 'es_qmle_oecd_all')
 show(es_qmle_plot_all_oecd)
 es_qmle_plot_split_oecd <- es_plot(list("Middle-Income Destinations" = es_qmle_oecd[[3]],
                                         "High-Income Destinations" = es_qmle_oecd[[4]]),
-                                   title = "OECD Sample: By Destination Income Group",
+                                   title = "OECD Control Group: By Destination Income Group",
                                    filename = 'es_qmle_oecd_split')
 
 show(es_qmle_plot_split_oecd)
 
 es_qmle_fullcontrol_lowincome <- es_plot(es_qmle[[2]],
-                                      title = "Full Sample: Low Income Destinations",
+                                      title = "Full Control Group: Low-Income Destinations",
                                       filename = 'es_qmle_fullcontrol_lowincome')
 
 show(es_qmle_fullcontrol_lowincome)
 
 es_qmle_highincome_lowincome <- es_plot(es_qmle_highincome[[2]],
-                                         title = 'High Income Sample: Low Income Destinations',
+                                         title = 'High-Income Control Group: Low-Income Destinations',
                                          filename = 'es_qmle_highincome_lowincome')
 
 show(es_qmle_highincome_lowincome)
+
+es_qmle_oecd_lowincome <- es_plot(es_qmle_oecd[[2]],
+                                  title = "OECD Control Group: Low-Income Destinations",
+                                  filename = 'es_qmle_oecd_lowincome')
 
 ############ROBUSTNESS
 
@@ -433,6 +444,24 @@ twfe_yearend <- outflows_joined %>%
   feglm(twfe_fml, cluster = cluster_level_spillovers, family = quasipoisson)
 
 etable(twfe_yearend)
+
+es_extended <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+es_extended_all <- es_plot(es_extended[[1]],
+                           title = 'Extended Event-Study: All Destinations',
+                           filename = 'es_extended_all')
+
+show(es_extended_all)
+
+es_extended_split <- es_plot(list("Middle-Income Destinations" = es_extended[[3]],
+                                  "High-Income Destinations" = es_extended[[4]]),
+                             title = "Extended Event-Study: By Destination Income Group",
+                             file = 'es_extended_split')
+
+show(es_extended_split)
 
 ###table
 
