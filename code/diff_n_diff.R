@@ -26,6 +26,7 @@ outflows <- vroom('../temporary/outflows_balanced.csv')
 outflows_us <- vroom('../temporary/us_outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 baseline_shares <- read.csv('../temporary/baseline_shares.csv')
+volume_price <- vroom('../temporary/volume_price.csv')
 
 ####OPTIONS
 #add phases
@@ -89,6 +90,7 @@ outflows_joined <- list(outflows_all, outflows_l, outflows_m, outflows_h) %>%
     reduce(left_join, by = c("user_cc", "time")) %>%
     left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
     left_join(baseline_shares, by = 'user_cc') %>%
+    left_join(volume_price[,c('time', 'price')], by = 'time') %>%
     mutate(announced = ifelse((time > announcement & time < disbursement), 1, 0),
          disbursed = ifelse(time >= disbursement, 1, 0),
          us_outflow = ifelse(user_cc == "US", 1, 0)
@@ -404,6 +406,42 @@ es_qmle_oecd_lowincome <- es_plot(es_qmle_oecd[[2]],
 
 ############ROBUSTNESS
 
+#####regs with BTC price
+
+price_regs <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars]~disbursed*us_outflow + disbursed + log(price)|user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+summary(price_regs)
+
+###BTC price table
+
+names(price_regs) <- model_names
+
+cmap_price_regs <- c('(Intercept)' = '$(\\text{Intercept})$',
+                     'us_outflow' = '$\\text{US}$',
+                     'announced' = '$\\text{announced}$',
+                     'us_outflow:announced' = '$\\text{announced} \\times \\text{US}$',
+                     'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$',
+                     'disbursed' = '$\\text{disbursed}$',
+                     'price' = 'Bitcoin Price (USD/BTC)',
+                     'log(price)' = 'ln(USD/BTC)')
+
+note_price_regs <- "Standard errors clustered at the country level. Bitcoin price is calculated as the average weekly exchange rate between USD and Bitcoin."
+
+price_reg_table <- modelsummary(price_regs,
+                                stars = star_map,
+                                coef_map = cmap_price_regs,
+                                gof_map = gm_twfe,
+                                gof_omit = gof_omitted,
+                                title = 'Poisson QMLE–Dependent Variable: Cryptocurrency Outflows',
+                                # fmt = fmt_term(price = 5),
+                                escape = FALSE,
+                                output = 'latex') %>%
+  add_footnote(note_price_regs, threeparttable = TRUE)
+
+kableExtra::save_kable(price_reg_table, file = '../output/regression_tables/price_regs.tex')
 
 ###extend time window
 

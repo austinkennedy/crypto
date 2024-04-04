@@ -93,6 +93,8 @@ flows_daily_balanced <- balanceFlows(flows_daily)
 # outflows_daily <- outflows_daily %>%
 #   left_join(country_data, by = c('user_cc2' = 'alpha.2'))
 
+volume_price <- getVolumePrice(trades, amount_usd, 'week')
+
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
 write.csv(flows_daily_balanced, '../temporary/bilateral_flows_balanced_daily.csv', row.names = FALSE)
@@ -102,7 +104,7 @@ write.csv(shares_wide, '../temporary/baseline_shares.csv', row.names = FALSE)
 write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)
 write.csv(total_volume, '../temporary/total_volume_by_country.csv', row.names = FALSE)
-
+write.csv(volume_price, '../temporary/volume_price.csv', row.names = FALSE)
 
 ######Data playground
 

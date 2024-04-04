@@ -15,6 +15,7 @@ flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
+
 ####US outflows graph
 
 stimulus_1 <- ymd('2020-04-12')
