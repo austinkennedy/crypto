@@ -41,47 +41,48 @@ data_cut <- data %>%
 
 # predictor_names <- shares_2019 %>% select(NG:BD) %>% colnames()
 
-# data_cut <- data %>%
+
+# data_cut <- data_cut %>%
 #   filter(time >= window_start & time <= window_end)
-# 
-# treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
-# 
-# post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
-# 
-# min_time_id <- min(data_cut$time_number)
-# 
-# max_time_id <- max(data_cut$time_number)
-# 
-# min_country_id <- min(data_cut$country_number)
-# 
-# max_country_id <- max(data_cut$country_number)
-# 
-# 
-# data_scm <- dataprep(foo = as.data.frame(data_cut),
-#                      dependent = 'outflow',
-#                      unit.variable = 'country_number',
-#                      time.variable = 'time_number',
-#                      treatment.identifier = 199,
-#                      controls.identifier = c(min_country_id:(treated_id - 1), (treated_id + 1):max_country_id),
-#                      time.optimize.ssr = c(min_time_id:(post_id - 1)),
-#                      time.predictors.prior = c(140:160),
-#                      unit.names.variable = c('user_cc'),
-#                      # predictors = predictor_names,
-#                      time.plot = 140:180
-# )
-# 
-# synth_out <- synth(data_scm)
-# 
-# path.plot(synth.res = synth_out,
-#           dataprep.res = data_scm,
-#           tr.intake = 161)
-# 
-# gaps.plot(synth.res = synth_out,
-#           dataprep.res = data_scm)
+
+treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
+
+post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
+
+min_time_id <- min(data_cut$time_number)
+
+max_time_id <- max(data_cut$time_number)
+
+min_country_id <- min(data_cut$country_number)
+
+max_country_id <- max(data_cut$country_number)
+
+
+data_scm <- dataprep(foo = as.data.frame(data_cut),
+                     dependent = 'outflow',
+                     unit.variable = 'country_number',
+                     time.variable = 'time_number',
+                     treatment.identifier = 199,
+                     controls.identifier = c(min_country_id:(treated_id - 1), (treated_id + 1):(max_country_id-1)),
+                     time.optimize.ssr = c(min_time_id:(post_id - 1)),
+                     # time.predictors.prior = c(min_time_id:(post_id - 1)),
+                     unit.names.variable = c('user_cc'),
+                     predictors = predictor_names,
+                     time.plot = min_time_id:max_time_id
+)
+
+synth_out <- synth(data_scm)
+
+path.plot(synth.res = synth_out,
+          dataprep.res = data_scm,
+          tr.intake = 161)
+
+gaps.plot(synth.res = synth_out,
+          dataprep.res = data_scm)
 
 ###Synthetic DID
 
-#Create X matrix
+# Create X matrix
 # 
 # flows_shares_weekly_balanced <- as.data.table(flows_shares_weekly_balanced)
 # 
