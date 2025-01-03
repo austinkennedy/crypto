@@ -18,24 +18,29 @@ library(abind)
 data <- vroom('../temporary/data_sdid.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
-
-disbursement <- as.Date('2020-04-09')
-
-
-window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-06-07')
-
-data <- data %>%
-  mutate(time = as.Date(time)) %>%
-  mutate(treated = ifelse((user_cc == "US" & time > disbursement), 1, 0))
-
+#clean outflow data
+data$time <- as.Date(data$time)
 data[is.na(data)] <- 0
 
-data_cut <- data %>%
-  filter(time >= window_start & time <= window_end) %>%
-  mutate(outflow_log = log(outflow)) %>%
-  left_join(country_data, by = c('user_cc'='alpha.2')) %>%
-  drop_na(label)
+prepare_data <- function(data, country_data, window_start, window_end, disbursement, treated_unit) {
+  # Ensure the dates are in Date format
+  window_start <- as.Date(window_start)
+  window_end <- as.Date(window_end)
+  disbursement <- as.Date(disbursement)
+  
+  # Filter and transform the data
+  data_cut <- data %>%
+    filter(time >= window_start & time <= window_end) %>%
+    mutate(
+      treated = ifelse((user_cc == treated_unit & time > disbursement), 1, 0),
+      outflow_log = log(outflow + 1)  # Add 1 to avoid log(0)
+    ) %>%
+    left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
+    drop_na(label)
+  
+  return(data_cut)
+}
+
 
 ##Synthetic Control
 
@@ -45,40 +50,40 @@ data_cut <- data %>%
 # data_cut <- data_cut %>%
 #   filter(time >= window_start & time <= window_end)
 
-treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
-
-post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
-
-min_time_id <- min(data_cut$time_number)
-
-max_time_id <- max(data_cut$time_number)
-
-min_country_id <- min(data_cut$country_number)
-
-max_country_id <- max(data_cut$country_number)
-
-
-data_scm <- dataprep(foo = as.data.frame(data_cut),
-                     dependent = 'outflow',
-                     unit.variable = 'country_number',
-                     time.variable = 'time_number',
-                     treatment.identifier = 199,
-                     controls.identifier = c(min_country_id:(treated_id - 1), (treated_id + 1):(max_country_id-1)),
-                     time.optimize.ssr = c(min_time_id:(post_id - 1)),
-                     # time.predictors.prior = c(min_time_id:(post_id - 1)),
-                     unit.names.variable = c('user_cc'),
-                     predictors = predictor_names,
-                     time.plot = min_time_id:max_time_id
-)
-
-synth_out <- synth(data_scm)
-
-path.plot(synth.res = synth_out,
-          dataprep.res = data_scm,
-          tr.intake = 161)
-
-gaps.plot(synth.res = synth_out,
-          dataprep.res = data_scm)
+# treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
+# 
+# post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
+# 
+# min_time_id <- min(data_cut$time_number)
+# 
+# max_time_id <- max(data_cut$time_number)
+# 
+# min_country_id <- min(data_cut$country_number)
+# 
+# max_country_id <- max(data_cut$country_number)
+# 
+# 
+# data_scm <- dataprep(foo = as.data.frame(data_cut),
+#                      dependent = 'outflow',
+#                      unit.variable = 'country_number',
+#                      time.variable = 'time_number',
+#                      treatment.identifier = 199,
+#                      controls.identifier = c(min_country_id:(treated_id - 1), (treated_id + 1):(max_country_id-1)),
+#                      time.optimize.ssr = c(min_time_id:(post_id - 1)),
+#                      # time.predictors.prior = c(min_time_id:(post_id - 1)),
+#                      unit.names.variable = c('user_cc'),
+#                      predictors = predictor_names,
+#                      time.plot = min_time_id:max_time_id
+# )
+# 
+# synth_out <- synth(data_scm)
+# 
+# path.plot(synth.res = synth_out,
+#           dataprep.res = data_scm,
+#           tr.intake = 161)
+# 
+# gaps.plot(synth.res = synth_out,
+#           dataprep.res = data_scm)
 
 ###Synthetic DID
 
@@ -100,7 +105,16 @@ gaps.plot(synth.res = synth_out,
 
 #Synthdid setup
 
-setup = panel.matrices(as.data.frame(data_cut),
+data_main <- prepare_data(
+    data = data,
+    country_data = country_data,
+    window_start = '2020-01-01',
+    window_end = '2020-06-07',
+    disbursement = '2020-04-09',
+    treated_unit = 'US'  # Example for the US
+)
+
+setup = panel.matrices(as.data.frame(data_main),
                        unit = 'label',
                        time = 'time',
                        outcome = 'outflow',
@@ -109,9 +123,9 @@ setup = panel.matrices(as.data.frame(data_cut),
 tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
 sprintf('point estimate: %1.2f', tau.hat)
 
-sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
 
-sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
 
 ggsave('../output/sdid_plots/sdid_main_plot.png', plot = sdid_main_plot, width = 9, height = 6, dpi = 300)
 ggsave('../output/sdid_plots/sdid_overlaid_plot.png', plot = sdid_overlaid_plot, width = 9, height = 6, dpi = 300)
@@ -122,7 +136,7 @@ control_plot <- synthdid_units_plot(tau.hat, units = row.names(top.controls)) + 
 
 ggsave('../output/sdid_plots/control_plot.png', plot = control_plot, width = 11, height = 6, dpi = 300)
 
-baseline_outflows_us <- data_cut %>%
+baseline_outflows_us <- data_main %>%
   filter(user_cc == 'US',
          treated == 0) %>%
   summarize(mean(outflow))
