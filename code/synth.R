@@ -119,8 +119,12 @@ setup = panel.matrices(as.data.frame(data_main),
                        time = 'time',
                        outcome = 'outflow',
                        treatment = 'treated')
+
+Y <- setup$Y
+N0 <- setup$N0
+T0 <- setup$T0
   
-tau.hat = synthdid_estimate(setup$Y, setup$N0, setup$T0)
+tau.hat = synthdid_estimate(Y, N0, T0)
 sprintf('point estimate: %1.2f', tau.hat)
 
 sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
@@ -154,6 +158,119 @@ synthdid_units_plot(
   units = NULL
 )
 
+#########################
+
+#TEST TIME EFFECTS
+
+#########################
+
+treatment_effects <- synthdid_effect_curve(tau.hat)
+
+# Step 3: Perform placebo tests
+placebo_effects <- matrix(NA, nrow = length(treatment_effects), ncol = N0)
+
+for (i in 1:N0) {
+  # Remove control unit i from the setup
+  placebo_Y <- Y[-i, ]
+  placebo_N0 <- N0 - 1
+  
+  # Estimate synthetic DID for the placebo
+  placebo_est <- synthdid_estimate(placebo_Y, placebo_N0, T0)
+  
+  print(length(synthdid_effect_curve(placebo_est)))
+  print(dim(placebo_effects))
+  
+  # Extract the placebo time-varying effects
+  placebo_effects[, i] <- synthdid_effect_curve(placebo_est)
+}
+
+# Step 4: Compute standard errors for post-treatment periods
+standard_errors <- apply(placebo_effects, 1, sd, na.rm = TRUE)
+
+# Step 5: Combine results
+results <- data.frame(
+  Period = post_treatment_indices,
+  Treatment_Effect = treatment_effects[post_treatment_indices],
+  Standard_Error = standard_errors
+)
+
+# View results
+print(results)
+
+##################Modified function from synthdid package
+
+contract3 = function(X, v) {
+  stopifnot(length(dim(X)) == 3, dim(X)[3] == length(v))
+  out = array(0, dim = dim(X)[1:2])
+  if (length(v) == 0) { return(out) }
+  for (ii in 1:length(v)) {
+    out = out + v[ii] * X[, , ii]
+  }
+  return(out)
+}
+
+synthdid_effect_curve_all_periods = function(estimate) {
+  setup = attr(estimate, 'setup')
+  weights = attr(estimate, 'weights')
+  X.beta = contract3(setup$X, weights$beta)  # Contribution of covariates
+  N1 = nrow(setup$Y) - setup$N0  # Number of treated units
+  T = ncol(setup$Y)  # Total number of periods
+  T0 = setup$T0  # Number of pre-treatment periods
+  
+  # Compute synthetic control estimates for all periods
+  tau.sc = t(c(-weights$omega, rep(1 / N1, N1))) %*% (setup$Y - X.beta)
+  
+  # Calculate the pre-treatment weighted mean using weights$lambda
+  pre_treatment_mean = c(tau.sc[1:T0] %*% weights$lambda)
+  
+  # Subtract the pre-treatment mean from all periods
+  tau.curve = as.numeric(tau.sc - pre_treatment_mean)
+  
+  tau.curve  # Return the effect curve for all periods
+}
+
+sum_normalize = function(x) {
+  if(sum(x) != 0) { x / sum(x) }
+  else { rep(1/length(x), length(x)) }
+  # if given a vector of zeros, return uniform weights
+  # this fine when used in bootstrap and placebo standard errors, where it is used only for initialization
+  # for jackknife standard errors, where it isn't, we handle the case of a vector of zeros without calling this function.
+}
+
+placebo_se_by_period = function(estimate, replications) {
+  setup = attr(estimate, 'setup')
+  opts = attr(estimate, 'opts')
+  weights = attr(estimate, 'weights')
+  N1 = nrow(setup$Y) - setup$N0
+  if (setup$N0 <= N1) { stop('must have more controls than treated units to use the placebo se') }
+  
+  # Identify post-treatment periods
+  post_periods = (setup$T0 + 1):ncol(setup$Y)
+  num_post_periods = length(post_periods)
+  
+  # Define modified theta function
+  theta = function(ind) {
+    N0 = length(ind) - N1
+    weights.boot = weights
+    weights.boot$omega = sum_normalize(weights$omega[ind[1:N0]])
+    est = do.call(synthdid_estimate, c(list(Y=setup$Y[ind,], N0=N0, T0=setup$T0, X=setup$X[ind, ,], weights=weights.boot), opts))
+    # Extract period-specific estimates
+    period_effects = synthdid_effect_curve_all_periods(est)
+    return(period_effects)
+  }
+  
+  # Bootstrap placebo estimates for each period
+  placebo_estimates = replicate(replications, theta(sample(1:setup$N0)))
+  
+  # Compute standard errors for each period
+  period_se = apply(placebo_estimates, 1, sd) * sqrt((replications - 1) / replications)
+  
+  return(period_se)
+}
+
+se_by_period = placebo_se_by_period(tau.hat, replications = 200)
+
+all_period_effects <- synthdid_effect_curve_all_periods(tau.hat)
 
 ########TEST SYNTH DID
 
