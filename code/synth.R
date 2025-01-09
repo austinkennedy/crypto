@@ -109,7 +109,8 @@ data_main <- prepare_data(
     data = data,
     country_data = country_data,
     window_start = '2020-01-01',
-    window_end = '2020-06-07',
+    # window_end = '2020-06-07',
+    window_end = '2020-09-01',
     disbursement = '2020-04-09',
     treated_unit = 'US'  # Example for the US
 )
@@ -164,38 +165,38 @@ synthdid_units_plot(
 
 #########################
 
-treatment_effects <- synthdid_effect_curve(tau.hat)
-
-# Step 3: Perform placebo tests
-placebo_effects <- matrix(NA, nrow = length(treatment_effects), ncol = N0)
-
-for (i in 1:N0) {
-  # Remove control unit i from the setup
-  placebo_Y <- Y[-i, ]
-  placebo_N0 <- N0 - 1
-  
-  # Estimate synthetic DID for the placebo
-  placebo_est <- synthdid_estimate(placebo_Y, placebo_N0, T0)
-  
-  print(length(synthdid_effect_curve(placebo_est)))
-  print(dim(placebo_effects))
-  
-  # Extract the placebo time-varying effects
-  placebo_effects[, i] <- synthdid_effect_curve(placebo_est)
-}
-
-# Step 4: Compute standard errors for post-treatment periods
-standard_errors <- apply(placebo_effects, 1, sd, na.rm = TRUE)
-
-# Step 5: Combine results
-results <- data.frame(
-  Period = post_treatment_indices,
-  Treatment_Effect = treatment_effects[post_treatment_indices],
-  Standard_Error = standard_errors
-)
-
-# View results
-print(results)
+# treatment_effects <- synthdid_effect_curve(tau.hat)
+# 
+# # Step 3: Perform placebo tests
+# placebo_effects <- matrix(NA, nrow = length(treatment_effects), ncol = N0)
+# 
+# for (i in 1:N0) {
+#   # Remove control unit i from the setup
+#   placebo_Y <- Y[-i, ]
+#   placebo_N0 <- N0 - 1
+#   
+#   # Estimate synthetic DID for the placebo
+#   placebo_est <- synthdid_estimate(placebo_Y, placebo_N0, T0)
+#   
+#   print(length(synthdid_effect_curve(placebo_est)))
+#   print(dim(placebo_effects))
+#   
+#   # Extract the placebo time-varying effects
+#   placebo_effects[, i] <- synthdid_effect_curve(placebo_est)
+# }
+# 
+# # Step 4: Compute standard errors for post-treatment periods
+# standard_errors <- apply(placebo_effects, 1, sd, na.rm = TRUE)
+# 
+# # Step 5: Combine results
+# results <- data.frame(
+#   Period = post_treatment_indices,
+#   Treatment_Effect = treatment_effects[post_treatment_indices],
+#   Standard_Error = standard_errors
+# )
+# 
+# # View results
+# print(results)
 
 ##################Modified function from synthdid package
 
@@ -237,7 +238,7 @@ sum_normalize = function(x) {
   # for jackknife standard errors, where it isn't, we handle the case of a vector of zeros without calling this function.
 }
 
-placebo_se_by_period = function(estimate, replications) {
+get_time_effects = function(estimate, replications) {
   setup = attr(estimate, 'setup')
   opts = attr(estimate, 'opts')
   weights = attr(estimate, 'weights')
@@ -264,13 +265,46 @@ placebo_se_by_period = function(estimate, replications) {
   
   # Compute standard errors for each period
   period_se = apply(placebo_estimates, 1, sd) * sqrt((replications - 1) / replications)
+  all_period_effects <- synthdid_effect_curve_all_periods(estimate)
   
-  return(period_se)
+  results <- data.frame(
+    time = colnames(setup$Y),
+    treatment_effect = all_period_effects,
+    se = period_se
+  )
+  
+  
+  return(results)
 }
 
 se_by_period = placebo_se_by_period(tau.hat, replications = 200)
 
 all_period_effects <- synthdid_effect_curve_all_periods(tau.hat)
+
+time_effects <- get_time_effects(tau.hat, replications = 200)
+
+# Add confidence intervals to the data
+time_effects <- time_effects %>%
+  mutate(lower_ci = treatment_effect - 1.96 * se,
+         upper_ci = treatment_effect + 1.96 * se)
+
+time_effects
+
+# Plot the treatment effect with confidence intervals
+time_effects_graph <- ggplot(time_effects, aes(x = time, y = treatment_effect)) +
+  geom_line(aes(group=1),color = "blue", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, group=1), alpha = 0.2, fill = "blue") +  # Confidence interval
+  geom_point(color = "blue", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2020-04-05', color = 'red', linewidth = 0.8) +
+  labs(
+    title = "Treatment Effect Over Time with Confidence Intervals",
+    x = "Time",
+    y = "Treatment Effect"
+  ) +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+
+ggsave('../output/sdid_plots/time_effects_with_CI.png', plot = time_effects_graph, width = 9, height = 6, dpi = 300)
 
 ########TEST SYNTH DID
 
