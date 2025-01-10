@@ -22,7 +22,7 @@ country_data <- read.csv('../temporary/country_data.csv')
 data$time <- as.Date(data$time)
 data[is.na(data)] <- 0
 
-prepare_data <- function(data, country_data, window_start, window_end, disbursement, treated_unit) {
+prepare_data <- function(data, country_data, window_start, window_end, disbursement, treated_unit, normalize_to_base_period = FALSE) {
   # Ensure the dates are in Date format
   window_start <- as.Date(window_start)
   window_end <- as.Date(window_end)
@@ -37,6 +37,22 @@ prepare_data <- function(data, country_data, window_start, window_end, disbursem
     ) %>%
     left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
     drop_na(label)
+  
+  if (normalize_to_base_period) {
+    # Calculate the base period value for normalization
+    base_values <- data_cut %>%
+      filter(time == min(time)) %>%
+      group_by(user_cc) %>%
+      summarize(base_outflow = mean(outflow, na.rm = TRUE), .groups = "drop")
+    
+    # Remove countries with zero base period outflows
+    base_values <- base_values %>% filter(base_outflow > 0)
+    
+    # Merge base values with data_cut
+    data_cut <- data_cut %>%
+      inner_join(base_values, by = "user_cc") %>%
+      mutate(outflow_normalized = (outflow / base_outflow) * 100)
+  }
   
   return(data_cut)
 }
@@ -161,125 +177,9 @@ synthdid_units_plot(
 
 #########################
 
-#TEST TIME EFFECTS
-
-#########################
-
-# treatment_effects <- synthdid_effect_curve(tau.hat)
-# 
-# # Step 3: Perform placebo tests
-# placebo_effects <- matrix(NA, nrow = length(treatment_effects), ncol = N0)
-# 
-# for (i in 1:N0) {
-#   # Remove control unit i from the setup
-#   placebo_Y <- Y[-i, ]
-#   placebo_N0 <- N0 - 1
-#   
-#   # Estimate synthetic DID for the placebo
-#   placebo_est <- synthdid_estimate(placebo_Y, placebo_N0, T0)
-#   
-#   print(length(synthdid_effect_curve(placebo_est)))
-#   print(dim(placebo_effects))
-#   
-#   # Extract the placebo time-varying effects
-#   placebo_effects[, i] <- synthdid_effect_curve(placebo_est)
-# }
-# 
-# # Step 4: Compute standard errors for post-treatment periods
-# standard_errors <- apply(placebo_effects, 1, sd, na.rm = TRUE)
-# 
-# # Step 5: Combine results
-# results <- data.frame(
-#   Period = post_treatment_indices,
-#   Treatment_Effect = treatment_effects[post_treatment_indices],
-#   Standard_Error = standard_errors
-# )
-# 
-# # View results
-# print(results)
+#TIME EFFECTS (Placebo method)
 
 ##################Modified function from synthdid package
-
-contract3 = function(X, v) {
-  stopifnot(length(dim(X)) == 3, dim(X)[3] == length(v))
-  out = array(0, dim = dim(X)[1:2])
-  if (length(v) == 0) { return(out) }
-  for (ii in 1:length(v)) {
-    out = out + v[ii] * X[, , ii]
-  }
-  return(out)
-}
-
-synthdid_effect_curve_all_periods = function(estimate) {
-  setup = attr(estimate, 'setup')
-  weights = attr(estimate, 'weights')
-  X.beta = contract3(setup$X, weights$beta)  # Contribution of covariates
-  N1 = nrow(setup$Y) - setup$N0  # Number of treated units
-  T = ncol(setup$Y)  # Total number of periods
-  T0 = setup$T0  # Number of pre-treatment periods
-  
-  # Compute synthetic control estimates for all periods
-  tau.sc = t(c(-weights$omega, rep(1 / N1, N1))) %*% (setup$Y - X.beta)
-  
-  # Calculate the pre-treatment weighted mean using weights$lambda
-  pre_treatment_mean = c(tau.sc[1:T0] %*% weights$lambda)
-  
-  # Subtract the pre-treatment mean from all periods
-  tau.curve = as.numeric(tau.sc - pre_treatment_mean)
-  
-  tau.curve  # Return the effect curve for all periods
-}
-
-sum_normalize = function(x) {
-  if(sum(x) != 0) { x / sum(x) }
-  else { rep(1/length(x), length(x)) }
-  # if given a vector of zeros, return uniform weights
-  # this fine when used in bootstrap and placebo standard errors, where it is used only for initialization
-  # for jackknife standard errors, where it isn't, we handle the case of a vector of zeros without calling this function.
-}
-
-get_time_effects = function(estimate, replications) {
-  setup = attr(estimate, 'setup')
-  opts = attr(estimate, 'opts')
-  weights = attr(estimate, 'weights')
-  N1 = nrow(setup$Y) - setup$N0
-  if (setup$N0 <= N1) { stop('must have more controls than treated units to use the placebo se') }
-  
-  # Identify post-treatment periods
-  post_periods = (setup$T0 + 1):ncol(setup$Y)
-  num_post_periods = length(post_periods)
-  
-  # Define modified theta function
-  theta = function(ind) {
-    N0 = length(ind) - N1
-    weights.boot = weights
-    weights.boot$omega = sum_normalize(weights$omega[ind[1:N0]])
-    est = do.call(synthdid_estimate, c(list(Y=setup$Y[ind,], N0=N0, T0=setup$T0, X=setup$X[ind, ,], weights=weights.boot), opts))
-    # Extract period-specific estimates
-    period_effects = synthdid_effect_curve_all_periods(est)
-    return(period_effects)
-  }
-  
-  # Bootstrap placebo estimates for each period
-  placebo_estimates = replicate(replications, theta(sample(1:setup$N0)))
-  
-  # Compute standard errors for each period
-  period_se = apply(placebo_estimates, 1, sd) * sqrt((replications - 1) / replications)
-  all_period_effects <- synthdid_effect_curve_all_periods(estimate)
-  
-  results <- data.frame(
-    time = colnames(setup$Y),
-    treatment_effect = all_period_effects,
-    se = period_se
-  )
-  
-  
-  return(results)
-}
-
-se_by_period = placebo_se_by_period(tau.hat, replications = 200)
-
-all_period_effects <- synthdid_effect_curve_all_periods(tau.hat)
 
 time_effects <- get_time_effects(tau.hat, replications = 200)
 
@@ -304,7 +204,114 @@ time_effects_graph <- ggplot(time_effects, aes(x = time, y = treatment_effect)) 
   theme_bw(base_size = 14) +
   theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
 
+show(time_effects_graph)
+
 ggsave('../output/sdid_plots/time_effects_with_CI.png', plot = time_effects_graph, width = 9, height = 6, dpi = 300)
+
+###############
+
+#TIME BASED PLACEBO
+
+###############
+
+#use Jan 2020 instead of April
+# data_time_placebo <- prepare_data(
+#   data = data,
+#   country_data = country_data,
+#   window_start = '2019-09-01',
+#   # window_end = '2019-06-07',
+#   window_end = '2020-09-01',
+#   disbursement = '2020-01-01',
+#   treated_unit = 'US'  # Example for the US
+# )
+
+data_time_placebo <- prepare_data(
+  data = data,
+  country_data = country_data,
+  window_start = '2018-01-01',
+  # window_end = '2019-06-07',
+  window_end = '2018-09-01',
+  disbursement = '2018-04-09',
+  treated_unit = 'US'  # Example for the US
+)
+
+setup_placebo_time = panel.matrices(as.data.frame(data_time_placebo),
+                       unit = 'label',
+                       time = 'time',
+                       outcome = 'outflow',
+                       treatment = 'treated')
+
+
+tau.hat_time_placebo = synthdid_estimate(setup_placebo_time$Y, setup_placebo_time$N0, setup_placebo_time$T0)
+sprintf('point estimate: %1.2f', tau.hat_time_placebo)
+
+sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_time_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_overlaid_plot_time_placebo)
+
+time_effects_time_placebo <- get_time_effects(tau.hat_time_placebo, replications = 200)
+
+# Add confidence intervals to the data
+time_effects_time_placebo <- time_effects_time_placebo %>%
+  mutate(lower_ci = treatment_effect - 1.96 * se,
+         upper_ci = treatment_effect + 1.96 * se)
+
+time_effects_time_placebo
+
+# Plot the treatment effect with confidence intervals
+time_effects_time_placebo_graph <- ggplot(time_effects_time_placebo, aes(x = time, y = treatment_effect)) +
+  geom_line(aes(group=1),color = "blue", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, group=1), alpha = 0.2, fill = "blue") +  # Confidence interval
+  geom_point(color = "blue", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2020-01-05', color = 'red', linewidth = 0.8) +
+  labs(
+    title = "Treatment Effect Over Time with Confidence Intervals",
+    x = "Time",
+    y = "Treatment Effect"
+  ) +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+
+show(time_effects_time_placebo_graph)
+
+##########################
+
+#Test normalization
+
+#########################
+
+data_normalized <- prepare_data(
+  data = data,
+  country_data = country_data,
+  window_start = '2019-10-01',
+  # window_end = '2020-06-07',
+  window_end = '2020-09-01',
+  disbursement = '2020-04-09',
+  treated_unit = 'US',
+  normalize_to_base_period = TRUE# Example for the US
+)
+
+setup_normalized <- panel.matrices(as.data.frame(data_normalized),
+               unit = 'label',
+               time = 'time',
+               outcome = 'outflow_normalized',
+               treatment = 'treated')
+
+tau.hat_normalized = synthdid_estimate(setup_normalized$Y, setup_normalized$N0, setup_normalized$T0)
+sprintf('point estimate: %1.2f', tau.hat_normalized)
+
+sdid_overlaid_plot_normalized <- synthdid_plot(tau.hat_normalized, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_overlaid_plot_normalized)
+
+
+
+
+
+
+
+
+
 
 ########TEST SYNTH DID
 
