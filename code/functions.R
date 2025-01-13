@@ -216,6 +216,41 @@ get_time_effects = function(estimate, replications) {
 }
 
 
+prepare_data_synth <- function(data, country_data, window_start, window_end, disbursement, treated_unit, normalize_to_base_period = FALSE) {
+  # Ensure the dates are in Date format
+  window_start <- as.Date(window_start)
+  window_end <- as.Date(window_end)
+  disbursement <- as.Date(disbursement)
+  
+  # Filter and transform the data
+  data_cut <- data %>%
+    filter(time >= window_start & time <= window_end) %>%
+    mutate(
+      treated = ifelse((user_cc == treated_unit & time > disbursement), 1, 0),
+      outflow_log = log(outflow + 1)  # Add 1 to avoid log(0)
+    ) %>%
+    left_join(country_data, by = c('user_cc' = 'alpha.2')) %>%
+    drop_na(label)
+  
+  if (normalize_to_base_period) {
+    # Calculate the base period value for normalization
+    base_values <- data_cut %>%
+      filter(time == min(time)) %>%
+      group_by(user_cc) %>%
+      summarize(base_outflow = mean(outflow, na.rm = TRUE), .groups = "drop")
+    
+    # Remove countries with zero base period outflows
+    base_values <- base_values %>% filter(base_outflow > 0)
+    
+    # Merge base values with data_cut
+    data_cut <- data_cut %>%
+      inner_join(base_values, by = "user_cc") %>%
+      mutate(outflow_normalized = (outflow / base_outflow) * 100)
+  }
+  
+  return(data_cut)
+}
+
 
 
 

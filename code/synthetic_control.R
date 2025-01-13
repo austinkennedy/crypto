@@ -12,45 +12,43 @@ source('functions.R')
 data <- vroom('../temporary/data_sdid.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
-disbursement <- as.Date('2020-04-09')
-
-
-window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-06-07')
-
-data <- data %>%
-  mutate(time = as.Date(time)) %>%
-  mutate(treated = ifelse((user_cc == "US" & time > disbursement), 1, 0))
-
+#clean outflow data
+data$time <- as.Date(data$time)
 data[is.na(data)] <- 0
 
-data_cut <- data %>%
-  filter(time >= window_start & time <= window_end) %>%
-  mutate(outflow_log = log(outflow)) %>%
-  left_join(country_data, by = c('user_cc'='alpha.2')) %>%
-  drop_na(label, PopTotal)
+data_normalized <- prepare_data_synth(
+  data = data,
+  country_data = country_data,
+  window_start = '2019-10-01',
+  # window_end = '2020-06-07',
+  window_end = '2020-09-01',
+  disbursement = '2020-04-09',
+  treated_unit = 'US',
+  normalize_to_base_period = TRUE
+)
 
 predictor_names <- c('PopTotal')
 
-treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
+treated_id <- max(data_normalized[data_normalized$user_cc == 'US',]$country_number)
 
-control_ids <- setdiff(unique(data_cut$country_number), treated_id)
+control_ids <- setdiff(unique(data_normalized$country_number), treated_id)
 
-post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
+post_id <- min(data_normalized[data_normalized$treated == 1,]$time_number)
 
-min_time_id <- min(data_cut$time_number)
+min_time_id <- min(data_normalized$time_number)
 
-max_time_id <- max(data_cut$time_number)
+max_time_id <- max(data_normalized$time_number)
 
-min_country_id <- min(data_cut$country_number)
+min_country_id <- min(data_normalized$country_number)
 
-max_country_id <- max(data_cut$country_number)
+max_country_id <- max(data_normalized$country_number)
 
-data_scm <- dataprep(foo = as.data.frame(data_cut),
-                     dependent = 'outflow',
+data_scm <- dataprep(foo = as.data.frame(data_normalized),
+                     # dependent = 'outflow',
+                     dependent = 'outflow_normalized',
                      unit.variable = 'country_number',
                      time.variable = 'time_number',
-                     treatment.identifier = 199,
+                     treatment.identifier = treated_id,
                      controls.identifier = control_ids,
                      time.optimize.ssr = c(min_time_id:(post_id - 1)),
                      time.predictors.prior = c(min_time_id:(post_id - 1)),
