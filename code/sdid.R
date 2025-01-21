@@ -23,49 +23,6 @@ data$time <- as.Date(data$time)
 data[is.na(data)] <- 0
 
 
-##Synthetic Control
-
-# predictor_names <- shares_2019 %>% select(NG:BD) %>% colnames()
-
-
-# data_cut <- data_cut %>%
-#   filter(time >= window_start & time <= window_end)
-
-# treated_id <- max(data_cut[data_cut$user_cc == 'US',]$country_number)
-# 
-# post_id <- min(data_cut[data_cut$treated == 1,]$time_number)
-# 
-# min_time_id <- min(data_cut$time_number)
-# 
-# max_time_id <- max(data_cut$time_number)
-# 
-# min_country_id <- min(data_cut$country_number)
-# 
-# max_country_id <- max(data_cut$country_number)
-# 
-# 
-# data_scm <- dataprep(foo = as.data.frame(data_cut),
-#                      dependent = 'outflow',
-#                      unit.variable = 'country_number',
-#                      time.variable = 'time_number',
-#                      treatment.identifier = 199,
-#                      controls.identifier = c(min_country_id:(treated_id - 1), (treated_id + 1):(max_country_id-1)),
-#                      time.optimize.ssr = c(min_time_id:(post_id - 1)),
-#                      # time.predictors.prior = c(min_time_id:(post_id - 1)),
-#                      unit.names.variable = c('user_cc'),
-#                      predictors = predictor_names,
-#                      time.plot = min_time_id:max_time_id
-# )
-# 
-# synth_out <- synth(data_scm)
-# 
-# path.plot(synth.res = synth_out,
-#           dataprep.res = data_scm,
-#           tr.intake = 161)
-# 
-# gaps.plot(synth.res = synth_out,
-#           dataprep.res = data_scm)
-
 ###Synthetic DID
 
 # Create X matrix
@@ -86,15 +43,53 @@ data[is.na(data)] <- 0
 
 #Synthdid setup
 
+create_X_matrix <- function(data, setup, idvar, timevar){
+  data <- as.data.table(data) %>%
+      melt(id.var = c(idvar, timevar)) %>%
+      nest_by(variable) %>%
+      mutate(X = list(
+        dcast(data.table(data), user_cc ~ time, value.var = 'value') %>%
+          .[data.table(user_cc = rownames(setup$Y)), on = 'user_cc'] %>%
+          .[, user_cc := NULL] %>%
+          as.matrix()
+      )) %>%
+      .$X %>%
+      abind(along=3)
+}
+
 data_main <- prepare_data_synth(
     data = data,
     country_data = country_data,
-    window_start = '2020-01-01',
+    # window_start = '2020-01-01',
+    window_start = '2019-11-01',
     # window_end = '2020-06-07',
     window_end = '2020-09-01',
     disbursement = '2020-04-09',
     treated_unit = 'US'  # Example for the US
 )
+
+X_mat = data_main %>%
+  select(user_cc, time, treated, BJ:ZA)
+
+# X_mat <- data_main[, c("user_cc", "time", "treated", BJ:ZA)]  # Replace BJ:ZA with actual column names if needed
+
+# Step 2: Create an empty list to store individual matrices
+X_list <- list()
+
+# Step 3: Loop through the covariate columns to create matrices for each covariate
+for (i in 4:ncol(X_mat)) {
+  # Generate the matrix for the current covariate
+  X_list[[i - 3]] <- panel.matrices(
+    as.data.frame(X_mat), 
+    unit = "user_cc", 
+    time = "time", 
+    outcome = colnames(X_mat)[i],  # Use the current covariate column name
+    treatment = "treated"
+  )$Y
+}
+
+# Step 4: Combine all covariate matrices along a new dimension (3rd dimension)
+control <- abind::abind(X_list, along = 3)
 
 setup = panel.matrices(as.data.frame(data_main),
                        unit = 'label',
@@ -102,11 +97,17 @@ setup = panel.matrices(as.data.frame(data_main),
                        outcome = 'outflow',
                        treatment = 'treated')
 
+# X = create_X_matrix(data = X_input, setup = setup, idvar = 'user_cc', timevar = 'time')
+
 Y <- setup$Y
 N0 <- setup$N0
 T0 <- setup$T0
   
-tau.hat = synthdid_estimate(Y, N0, T0)
+tau.hat = synthdid_estimate(Y,
+                            N0,
+                            T0,
+                            # X = control
+                            )
 sprintf('point estimate: %1.2f', tau.hat)
 
 sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
@@ -146,14 +147,37 @@ synthdid_units_plot(
 
 ##################Modified function from synthdid package
 
-time_effects <- get_time_effects(tau.hat, replications = 200)
+baseline_mean <- data_main %>%
+  filter(user_cc == 'US' & treated == 0) %>%
+  summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
+  pull(pre_treatment_mean)
+
+time_effects <- get_time_effects(tau.hat, replications = 1000)
+
+get_confidence_intervals <- function(data, time_effects, country){
+  baseline_mean <- data %>%
+    filter(user_cc == country & treated == 0) %>%
+    summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
+    pull(pre_treatment_mean)
+
+  data_with_ci <- time_effects %>%
+    mutate(lower_ci = treatment_effect - 1.96 * se,
+           upper_ci = treatment_effect + 1.96 * se,
+           treatment_effect_relative = treatment_effect/baseline_mean,
+           lower_ci_relative = lower_ci/baseline_mean,
+           upper_ci_relative = upper_ci/baseline_mean)
+  
+  return(data_with_ci)
+  
+}
 
 # Add confidence intervals to the data
 time_effects <- time_effects %>%
   mutate(lower_ci = treatment_effect - 1.96 * se,
-         upper_ci = treatment_effect + 1.96 * se)
-
-time_effects
+         upper_ci = treatment_effect + 1.96 * se,
+         treatment_effect_relative = treatment_effect/baseline_mean,
+         lower_ci_relative = lower_ci/baseline_mean,
+         upper_ci_relative = upper_ci/baseline_mean)
 
 # Plot the treatment effect with confidence intervals
 time_effects_graph <- ggplot(time_effects, aes(x = time, y = treatment_effect)) +
@@ -173,24 +197,85 @@ show(time_effects_graph)
 
 ggsave('../output/sdid_plots/time_effects_with_CI.png', plot = time_effects_graph, width = 9, height = 6, dpi = 300)
 
+#Plot relative treatment effects
+time_effects_relative_graph <- ggplot(time_effects, aes(x = time, y = treatment_effect_relative)) +
+  geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci_relative, ymax = upper_ci_relative, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
+  geom_point(color = "black", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2020-04-05', color = 'black', linewidth = 0.8, linetype='longdash') +
+  labs(
+    x = "Time",
+    y = "Treatment Effect, Relative to Pre-Treatment Mean"
+  ) +
+  theme_bw(base_size = 14) +
+  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+
+show(time_effects_relative_graph)
+
+ggsave('../output/sdid_plots/time_effects_relative_with_CI.png', plot = time_effects_relative_graph, width = 9, height = 6, dpi = 300)
+
+
 ###############
 
-#TIME BASED PLACEBO
+#TIME BASED PLACEBO, JAN 2020
 
 ###############
 
-#use Jan 2020 instead of April
-# data_time_placebo <- prepare_data_synth(
-#   data = data,
-#   country_data = country_data,
-#   window_start = '2019-09-01',
-#   # window_end = '2019-06-07',
-#   window_end = '2020-09-01',
-#   disbursement = '2020-01-01',
-#   treated_unit = 'US'  # Example for the US
-# )
+# use Jan 2020 instead of April
+data_jan_2020_placebo <- prepare_data_synth(
+  data = data,
+  country_data = country_data,
+  window_start = '2019-09-01',
+  # window_end = '2019-06-07',
+  window_end = '2020-09-01',
+  disbursement = '2020-01-01',
+  treated_unit = 'US'  # Example for the US
+)
 
-data_time_placebo <- prepare_data_synth(
+setup_jan_2020_placebo = panel.matrices(as.data.frame(data_jan_2020_placebo),
+                       unit = 'label',
+                       time = 'time',
+                       outcome = 'outflow',
+                       treatment = 'treated')
+
+
+tau.hat_jan_2020_placebo = synthdid_estimate(setup_jan_2020_placebo$Y, setup_jan_2020_placebo$N0, setup_jan_2020_placebo$T0)
+sprintf('point estimate: %1.2f', tau.hat_jan_2020_placebo)
+# 
+# sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+# 
+# show(sdid_overlaid_plot_time_placebo)
+
+time_effect_jan_2020_placebo <- get_time_effects(tau.hat_jan_2020_placebo, replications = 1000)
+
+
+time_effect_jan_2020_placebo <- get_confidence_intervals(data_jan_2020_placebo, time_effect_jan_2020_placebo, 'US')
+
+# Plot the treatment effect with confidence intervals
+time_effect_jan_2020_placebo_graph <- ggplot(time_effect_jan_2020_placebo, aes(x = time, y = treatment_effect_relative)) +
+  geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci_relative, ymax = upper_ci_relative, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
+  geom_point(color = "black", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2020-01-05', color = 'black', linewidth = 0.8, linetype = 'longdash') +
+  labs(
+    x = "Time",
+    y = "Treatment effect, relative to pre-treatment mean"
+  ) +
+  theme_bw(base_size = 14) +
+  ylim(-0.15, 0.55) +
+  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+
+show(time_effect_jan_2020_placebo_graph)
+
+ggsave('../output/sdid_plots/jan_2020_placebo_time_effects.png', plot = time_effect_jan_2020_placebo_graph, width = 9, height = 6, dpi = 300)
+########################################
+
+#2018 as a placebo
+
+########################################
+
+
+data_2018_placebo <- prepare_data_synth(
   data = data,
   country_data = country_data,
   window_start = '2018-01-01',
@@ -200,44 +285,45 @@ data_time_placebo <- prepare_data_synth(
   treated_unit = 'US'  # Example for the US
 )
 
-setup_placebo_time = panel.matrices(as.data.frame(data_time_placebo),
-                       unit = 'label',
-                       time = 'time',
-                       outcome = 'outflow',
-                       treatment = 'treated')
+setup_2018_placebo = panel.matrices(as.data.frame(data_2018_placebo),
+                                        unit = 'label',
+                                        time = 'time',
+                                        outcome = 'outflow',
+                                        treatment = 'treated')
 
 
-tau.hat_time_placebo = synthdid_estimate(setup_placebo_time$Y, setup_placebo_time$N0, setup_placebo_time$T0)
-sprintf('point estimate: %1.2f', tau.hat_time_placebo)
+tau.hat_2018_placebo = synthdid_estimate(setup_2018_placebo$Y, setup_2018_placebo$N0, setup_2018_placebo$T0)
+sprintf('point estimate: %1.2f', tau.hat_2018_placebo)
+# 
+# sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+# 
+# show(sdid_overlaid_plot_time_placebo)
 
-sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_time_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
-
-show(sdid_overlaid_plot_time_placebo)
-
-time_effects_time_placebo <- get_time_effects(tau.hat_time_placebo, replications = 200)
+time_effect_2018_placebo <- get_time_effects(tau.hat_2018_placebo, replications = 1000)
 
 # Add confidence intervals to the data
-time_effects_time_placebo <- time_effects_time_placebo %>%
-  mutate(lower_ci = treatment_effect - 1.96 * se,
-         upper_ci = treatment_effect + 1.96 * se)
+time_effect_2018_placebo <- get_confidence_intervals(data_2018_placebo, time_effect_2018_placebo, 'US')
 
-time_effects_time_placebo
+time_effect_2018_placebo
 
 # Plot the treatment effect with confidence intervals
-time_effects_time_placebo_graph <- ggplot(time_effects_time_placebo, aes(x = time, y = treatment_effect)) +
-  geom_line(aes(group=1),color = "blue", linewidth = 1) +  # Treatment effect line
-  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, group=1), alpha = 0.2, fill = "blue") +  # Confidence interval
-  geom_point(color = "blue", size = 2) +  # Points for treatment effects
-  geom_vline(xintercept = '2020-01-05', color = 'red', linewidth = 0.8) +
+time_effect_2018_placebo_graph <- ggplot(time_effect_2018_placebo, aes(x = time, y = treatment_effect_relative)) +
+  geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci_relative, ymax = upper_ci_relative, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
+  geom_point(color = "black", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2018-04-08', color = 'black', linewidth = 0.8, linetype = 'longdash') +
   labs(
-    title = "Treatment Effect Over Time with Confidence Intervals",
     x = "Time",
-    y = "Treatment Effect"
+    y = "Treatment effect, relative to pre-treatment mean"
   ) +
+  ylim(-0.2, 0.55) +
   theme_bw(base_size = 14) +
   theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
 
-show(time_effects_time_placebo_graph)
+show(time_effect_2018_placebo_graph)
+
+ggsave('../output/sdid_plots/2018_placebo_time_effects.png', plot = time_effect_2018_placebo_graph, width = 9, height = 6, dpi = 300)
+
 
 ##########################
 

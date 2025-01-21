@@ -24,6 +24,7 @@ pop <- read.csv('../input/un_pop.csv')
 fees <- read.csv('../input/wb_remittance_prices.csv')
 income_groups <- read.csv('../input/income_groups.csv')
 oecd <- read.csv('../input/oecd.csv')
+indices <- read.csv('../input/country_indices.csv')
 
 
 #ACS data
@@ -164,12 +165,15 @@ country_data <- country_data %>%
   mutate(oecd = ifelse(!is.na(Accession), 1, 0)) %>%
   select(-c(Name, Accession))
 
+#country indices
+
+country_data <- country_data %>%
+  left_join(subset(indices, select = -c(alpha.2, Country)), by = 'alpha.3')
+
 #foreign-born quantiles
 
 country_data <- country_data %>%
   mutate(quantile = ntile(fb1_per1000 , 4))
- 
-
 
 
 #export
