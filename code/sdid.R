@@ -106,13 +106,17 @@ T0 <- setup$T0
 tau.hat = synthdid_estimate(Y,
                             N0,
                             T0,
-                            # X = control
+                            X = control
                             )
 sprintf('point estimate: %1.2f', tau.hat)
 
-sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
 
-sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control", se.method='placebo') + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+show(sdid_main_plot)
+
+sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_overlaid_plot)
 
 ggsave('../output/sdid_plots/sdid_main_plot.png', plot = sdid_main_plot, width = 9, height = 6, dpi = 300)
 ggsave('../output/sdid_plots/sdid_overlaid_plot.png', plot = sdid_overlaid_plot, width = 9, height = 6, dpi = 300)
@@ -153,23 +157,6 @@ baseline_mean <- data_main %>%
   pull(pre_treatment_mean)
 
 time_effects <- get_time_effects(tau.hat, replications = 1000)
-
-get_confidence_intervals <- function(data, time_effects, country){
-  baseline_mean <- data %>%
-    filter(user_cc == country & treated == 0) %>%
-    summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
-    pull(pre_treatment_mean)
-
-  data_with_ci <- time_effects %>%
-    mutate(lower_ci = treatment_effect - 1.96 * se,
-           upper_ci = treatment_effect + 1.96 * se,
-           treatment_effect_relative = treatment_effect/baseline_mean,
-           lower_ci_relative = lower_ci/baseline_mean,
-           upper_ci_relative = upper_ci/baseline_mean)
-  
-  return(data_with_ci)
-  
-}
 
 # Add confidence intervals to the data
 time_effects <- time_effects %>%
@@ -238,13 +225,49 @@ setup_jan_2020_placebo = panel.matrices(as.data.frame(data_jan_2020_placebo),
                        outcome = 'outflow',
                        treatment = 'treated')
 
+X_mat = data_jan_2020_placebo %>%
+  select(user_cc, time, treated, BJ:ZA)
 
-tau.hat_jan_2020_placebo = synthdid_estimate(setup_jan_2020_placebo$Y, setup_jan_2020_placebo$N0, setup_jan_2020_placebo$T0)
+# X_mat <- data_main[, c("user_cc", "time", "treated", BJ:ZA)]  # Replace BJ:ZA with actual column names if needed
+
+# Step 2: Create an empty list to store individual matrices
+X_list <- list()
+
+# Step 3: Loop through the covariate columns to create matrices for each covariate
+for (i in 4:ncol(X_mat)) {
+  # Generate the matrix for the current covariate
+  X_list[[i - 3]] <- panel.matrices(
+    as.data.frame(X_mat), 
+    unit = "user_cc", 
+    time = "time", 
+    outcome = colnames(X_mat)[i],  # Use the current covariate column name
+    treatment = "treated"
+  )$Y
+}
+
+# Step 4: Combine all covariate matrices along a new dimension (3rd dimension)
+control <- abind::abind(X_list, along = 3)
+
+
+tau.hat_jan_2020_placebo = synthdid_estimate(
+  setup_jan_2020_placebo$Y,
+  setup_jan_2020_placebo$N0,
+  setup_jan_2020_placebo$T0,
+  X = control
+  )
 sprintf('point estimate: %1.2f', tau.hat_jan_2020_placebo)
-# 
-# sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
-# 
-# show(sdid_overlaid_plot_time_placebo)
+
+sdid_main_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_main_plot_jan_2020_placebo)
+
+sdid_overlaid_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_overlaid_plot_jan_2020_placebo)
+
+ggsave('../output/sdid_plots/sdid_main_plot_jan_2020_placebo.png', plot = sdid_main_plot_jan_2020_placebo, width = 9, height = 6, dpi = 300)
+ggsave('../output/sdid_plots/sdid_overlaid_plot_jan_2020_placebo.png', plot = sdid_overlaid_plot_jan_2020_placebo, width = 9, height = 6, dpi = 300)
+
 
 time_effect_jan_2020_placebo <- get_time_effects(tau.hat_jan_2020_placebo, replications = 1000)
 
@@ -278,7 +301,7 @@ ggsave('../output/sdid_plots/jan_2020_placebo_time_effects.png', plot = time_eff
 data_2018_placebo <- prepare_data_synth(
   data = data,
   country_data = country_data,
-  window_start = '2018-01-01',
+  window_start = '2017-11-01',
   # window_end = '2019-06-07',
   window_end = '2018-09-01',
   disbursement = '2018-04-09',
@@ -291,13 +314,50 @@ setup_2018_placebo = panel.matrices(as.data.frame(data_2018_placebo),
                                         outcome = 'outflow',
                                         treatment = 'treated')
 
+X_mat = data_2018_placebo %>%
+  select(user_cc, time, treated, BJ:ZA)
 
-tau.hat_2018_placebo = synthdid_estimate(setup_2018_placebo$Y, setup_2018_placebo$N0, setup_2018_placebo$T0)
+# X_mat <- data_main[, c("user_cc", "time", "treated", BJ:ZA)]  # Replace BJ:ZA with actual column names if needed
+
+# Step 2: Create an empty list to store individual matrices
+X_list <- list()
+
+# Step 3: Loop through the covariate columns to create matrices for each covariate
+for (i in 4:ncol(X_mat)) {
+  # Generate the matrix for the current covariate
+  X_list[[i - 3]] <- panel.matrices(
+    as.data.frame(X_mat), 
+    unit = "user_cc", 
+    time = "time", 
+    outcome = colnames(X_mat)[i],  # Use the current covariate column name
+    treatment = "treated"
+  )$Y
+}
+
+# Step 4: Combine all covariate matrices along a new dimension (3rd dimension)
+control <- abind::abind(X_list, along = 3)
+
+
+
+tau.hat_2018_placebo = synthdid_estimate(
+  setup_2018_placebo$Y,
+  setup_2018_placebo$N0,
+  setup_2018_placebo$T0,
+  X = control
+  )
+
 sprintf('point estimate: %1.2f', tau.hat_2018_placebo)
-# 
-# sdid_overlaid_plot_time_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
-# 
-# show(sdid_overlaid_plot_time_placebo)
+
+sdid_main_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_main_plot_2018_placebo)
+
+sdid_overlaid_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+
+show(sdid_overlaid_plot_2018_placebo)
+
+ggsave('../output/sdid_plots/sdid_main_plot_2018_placebo.png', plot = sdid_main_plot_2018_placebo, width = 9, height = 6, dpi = 300)
+ggsave('../output/sdid_plots/sdid_overlaid_plot_2018_placebo.png', plot = sdid_overlaid_plot_2018_placebo, width = 9, height = 6, dpi = 300)
 
 time_effect_2018_placebo <- get_time_effects(tau.hat_2018_placebo, replications = 1000)
 
@@ -327,6 +387,77 @@ ggsave('../output/sdid_plots/2018_placebo_time_effects.png', plot = time_effect_
 
 ##########################
 
+#Drop Nigeria
+
+##########################
+
+# data_drop_nigeria <- data_main %>%
+#   filter(! user_cc %in% c("NG", "GH"))
+
+data_drop_nigeria <- data_main %>%
+  filter(income_group %in% c("H"))
+
+X_mat = data_drop_nigeria %>%
+  select(user_cc, time, treated, BJ:ZA)
+
+# X_mat <- data_main[, c("user_cc", "time", "treated", BJ:ZA)]  # Replace BJ:ZA with actual column names if needed
+
+# Step 2: Create an empty list to store individual matrices
+X_list <- list()
+
+# Step 3: Loop through the covariate columns to create matrices for each covariate
+for (i in 4:ncol(X_mat)) {
+  # Generate the matrix for the current covariate
+  X_list[[i - 3]] <- panel.matrices(
+    as.data.frame(X_mat), 
+    unit = "user_cc", 
+    time = "time", 
+    outcome = colnames(X_mat)[i],  # Use the current covariate column name
+    treatment = "treated"
+  )$Y
+}
+
+# Step 4: Combine all covariate matrices along a new dimension (3rd dimension)
+control <- abind::abind(X_list, along = 3)
+
+setup_drop_nigeria = panel.matrices(as.data.frame(data_drop_nigeria),
+                                     unit = 'label',
+                                     time = 'time',
+                                     outcome = 'outflow',
+                                     treatment = 'treated')
+
+tau.hat_drop_nigeria <- synthdid_estimate(
+  setup_drop_nigeria$Y,
+  setup_drop_nigeria$N0,
+  setup_drop_nigeria$T0,
+  X = control
+)
+
+sprintf('point estimate: %1.2f', tau.hat_drop_nigeria)
+
+time_effects_drop_nigeria <- get_time_effects(tau.hat_drop_nigeria, replications = 1000)
+
+time_effects_drop_nigeria <- get_confidence_intervals(data_drop_nigeria, time_effects_drop_nigeria, 'US')
+
+# Plot the treatment effect with confidence intervals
+time_effects_drop_nigeria_graph <- ggplot(time_effects_drop_nigeria, aes(x = time, y = treatment_effect_relative)) +
+  geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci_relative, ymax = upper_ci_relative, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
+  geom_point(color = "black", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = '2020-04-05', color = 'black', linewidth = 0.8, linetype = 'longdash') +
+  labs(
+    x = "Time",
+    y = "Treatment effect, relative to pre-treatment mean"
+  ) +
+  theme_bw(base_size = 14) +
+  # ylim(-0.15, 0.55) +
+  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+
+show(time_effects_drop_nigeria_graph)
+
+
+##########################
+
 #Test normalization
 
 #########################
@@ -339,7 +470,8 @@ data_normalized <- prepare_data_synth(
   window_end = '2020-09-01',
   disbursement = '2020-04-09',
   treated_unit = 'US',
-  normalize_to_base_period = TRUE# Example for the US
+  # normalize_to_base_period = TRUE# Example for the US,
+  normalize_by_growth_rate = TRUE
 )
 
 setup_normalized <- panel.matrices(as.data.frame(data_normalized),
@@ -356,9 +488,63 @@ sdid_overlaid_plot_normalized <- synthdid_plot(tau.hat_normalized, overlay = 1, 
 show(sdid_overlaid_plot_normalized)
 
 
+#########################################
+
+#Compute Placebo distribution
+
+# Compute placebo treatment effects
+compute_placebo_sdid <- function(placebo_unit) {
+  placebo_data <- data_main %>% mutate(treated = ifelse(user_cc == placebo_unit & time >= '2020-04-09', 1, 0))
+  
+  pre_treatment_mean_placebo <- placebo_data %>%
+    filter(user_cc == placebo_unit & time < '2020-04-09') %>%
+    summarise(mean_outflow = mean(outf low, na.rm = TRUE)) %>%
+    pull(mean_outflow)
+  
+  tryCatch({
+    result <- synthdid_estimate(
+      Y = panel.matrices(as.data.frame(placebo_data), unit = 'user_cc', time = 'time', outcome = 'outflow', treatment = 'treated')$Y,
+      N0 = setup$N0,
+      T0 = setup$T0,
+      X = control
+    )
+    return((result / pre_treatment_mean_placebo) * 100)
+  }, error = function(e) return(NA))
+}
+
+control_countries <- data_main %>%
+  group_by(user_cc) %>%
+  filter(user_cc != 'US' & all(outflow != 0)) %>%
+  pull(user_cc) %>%
+  unique()
+
+placebo_effects <- map_dbl(control_countries, compute_placebo_sdid)
+
+placebo_df <- data.frame(effect = placebo_effects)
+
+# Calculate pre-treatment mean for US
+pre_treatment_mean_us <- data_main %>%
+  filter(user_cc == 'US' & time < '2020-04-09') %>%
+  summarise(mean_outflow = mean(outflow, na.rm = TRUE)) %>%
+  pull(mean_outflow)
+
+# Convert to percent change
+tau.hat_percent <- (tau.hat / pre_treatment_mean_us) * 100
+
+sprintf('point estimate (percent change): %1.2f%%', tau.hat_percent)
 
 
 
+
+placebo_histogram <- ggplot(placebo_df, aes(x = effect)) +
+  geom_histogram(bins = 100, fill = 'blue', alpha=0.5) +
+  # geom_density(adjust = 3) +
+  geom_vline(xintercept = tau.hat_percent, color = 'red', linetype = 'dashed', size = 1) +
+  labs(x = 'Placebo Treatment Effects',
+       y = 'Frequency') +
+  theme_minimal()
+
+show(placebo_histogram)
 
 
 

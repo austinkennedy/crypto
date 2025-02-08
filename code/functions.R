@@ -216,7 +216,7 @@ get_time_effects = function(estimate, replications) {
 }
 
 
-prepare_data_synth <- function(data, country_data, window_start, window_end, disbursement, treated_unit, normalize_to_base_period = FALSE) {
+prepare_data_synth <- function(data, country_data, window_start, window_end, disbursement, treated_unit, normalize_to_base_period = FALSE, normalize_by_growth_rate = FALSE) {
   # Ensure the dates are in Date format
   window_start <- as.Date(window_start)
   window_end <- as.Date(window_end)
@@ -248,10 +248,35 @@ prepare_data_synth <- function(data, country_data, window_start, window_end, dis
       mutate(outflow_normalized = (outflow / base_outflow) * 100)
   }
   
+  if (normalize_by_growth_rate) {
+    data_cut <- data_cut %>%
+      group_by(user_cc) %>%
+      filter(!any(outflow==0)) %>%
+      arrange(time) %>%
+      mutate(outflow_normalized = (outflow - lag(outflow)) / lag(outflow)) %>%
+      ungroup() %>%
+      filter(!is.na(outflow_normalized))
+  }
+  
   return(data_cut)
 }
 
-
+get_confidence_intervals <- function(data, time_effects, country){
+  baseline_mean <- data %>%
+    filter(user_cc == country & treated == 0) %>%
+    summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
+    pull(pre_treatment_mean)
+  
+  data_with_ci <- time_effects %>%
+    mutate(lower_ci = treatment_effect - 1.96 * se,
+           upper_ci = treatment_effect + 1.96 * se,
+           treatment_effect_relative = treatment_effect/baseline_mean,
+           lower_ci_relative = lower_ci/baseline_mean,
+           upper_ci_relative = upper_ci/baseline_mean)
+  
+  return(data_with_ci)
+  
+}
 
 
 
