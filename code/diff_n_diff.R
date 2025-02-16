@@ -195,7 +195,7 @@ es_qmle_oecd <- outflows_joined %>%
 iplot(es_qmle_oecd)
 
 es_qmle_highincome <- outflows_joined %>%
-  filter(time >= window_start & time <= window_end,
+  filter(time >= window_start & time <= '2020-07-05',
          income_group == 'H') %>%
   feglm(.[did_yvars] ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
 
@@ -403,6 +403,35 @@ show(es_qmle_highincome_lowincome)
 es_qmle_oecd_lowincome <- es_plot(es_qmle_oecd[[2]],
                                   title = "OECD Control Group: Low-Income Destinations",
                                   filename = 'es_qmle_oecd_lowincome')
+
+
+##################TRANSFORMED EVENT STUDY GRAPHS
+
+source('functions.R')
+
+es_qmle_highincome_all_transformed <- plot_transformed_es(es_qmle_highincome[[1]],
+                                                          title = 'All Destinations',
+                                                          filename = 'es_qmle_highincome_all_transformed')
+
+show(es_qmle_highincome_all_transformed)
+
+es_qmle_highincome_lowincome_transformed <- plot_transformed_es(es_qmle_highincome[[2]],
+                                                          title = 'Low-Income Destinations',
+                                                          filename = 'es_qmle_highincome_lowincome_transformed')
+
+show(es_qmle_highincome_lowincome_transformed)
+
+es_qmle_highincome_middleincome_transformed <- plot_transformed_es(es_qmle_highincome[[3]],
+                                                                title = 'Middle-Income Destinations',
+                                                                filename = 'es_qmle_highincome_middleincome_transformed')
+
+show(es_qmle_highincome_middleincome_transformed)
+
+es_qmle_highincome_highincome_transformed <- plot_transformed_es(es_qmle_highincome[[4]],
+                                                                   title = 'High-Income Destinations',
+                                                                   filename = 'es_qmle_highincome_highincome_transformed')
+
+show(es_qmle_highincome_highincome_transformed)
 
 ############ROBUSTNESS
 
@@ -760,14 +789,10 @@ etable(qmle_net)
 
 
 
+##############transform estimates
 
 
+plot <- plot_transformed_es(es_qmle_highincome[[1]], title='All Destinations', filename = 'es_qmle_highincome_all')
 
-
-
-
-
-
-
-
+show(plot)
 

@@ -15,6 +15,9 @@ flows <- vroom('../temporary/bilateral_flows_balanced.csv')
 outflows <- vroom('../temporary/outflows_balanced.csv')
 country_data <- read.csv('../temporary/country_data.csv')
 
+matched_cross_border_trades <- matched_trades %>%
+  filter(user_cc != user_cc2)
+
 
 ####US outflows graph
 
@@ -76,18 +79,30 @@ ggsave('../output/figures_paxful/paxful_volume_price.png', plot = paxful_volume_
 #Descriptive_stats
 unmatched_stats <- list()
 matched_stats <- list()
+matched_cross_border_stats <- list()
+unmatched_stats_2020 <- list()
 
 unmatched_stats[['N']] <- nrow(trades)
 matched_stats[['N']] <- nrow(matched_trades)
+matched_cross_border_stats[['N']] <- nrow(matched_cross_border_trades)
 
 unmatched_stats[['Average Trade Size']] <- mean(trades$amount_usd)
 matched_stats[['Average Trade Size']] <- mean(matched_trades$amount_usd)
+matched_cross_border_stats[['Average Trade Size']] <- mean(matched_cross_border_trades$amount_usd)
 
 unmatched_stats[['Maximum Trade Size']] <- max(trades$amount_usd)
 matched_stats[['Maximum Trade Size']] <- max(matched_trades$amount_usd)
+matched_cross_border_stats[['Maximum Trade Size']] <- max(matched_cross_border_trades$amount_usd)
 
 unmatched_stats[['Total Volume']] <- sum(trades$amount_usd)
 matched_stats[['Total Volume']] <- sum(matched_trades$amount_usd)
+matched_cross_border_stats[['Total Volume']] <- sum(matched_cross_border_trades$amount_usd)
+
+
+unmatched_stats_2020[['Total Volume']] <- trades %>%
+  filter(date >= '2020-01-01' & date < '2021-01-01') %>%
+  pull(amount_usd) %>%
+  sum
 
 stats <- do.call(rbind, Map(data.frame, All = unmatched_stats, Matched = matched_stats))
 

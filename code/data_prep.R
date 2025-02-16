@@ -95,6 +95,15 @@ flows_daily_balanced <- balanceFlows(flows_daily)
 
 volume_price <- getVolumePrice(trades, amount_usd, 'week')
 
+######Transaction amounts
+
+transaction_amounts <- trades_matched %>%
+  group_by(time = as.Date(floor_date(date, 'week')),
+           user_cc,
+           user_cc2) %>%
+  summarise(amount_usd_avg = mean(amount_usd),
+            amount_usd_median = median(amount_usd))
+
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
 write.csv(flows_daily_balanced, '../temporary/bilateral_flows_balanced_daily.csv', row.names = FALSE)
@@ -105,6 +114,7 @@ write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)
 write.csv(total_volume, '../temporary/total_volume_by_country.csv', row.names = FALSE)
 write.csv(volume_price, '../temporary/volume_price.csv', row.names = FALSE)
+write.csv(transaction_amounts, '../temporary/transaction_amounts_bilateral.csv', row.names = FALSE)
 
 ######Data playground
 

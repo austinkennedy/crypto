@@ -278,7 +278,84 @@ get_confidence_intervals <- function(data, time_effects, country){
   
 }
 
+transform_qmle <- function(es_model){
+  beta <- es_model$coefficients
+  se <- es_model$se
+  
+  beta_transformed <- exp(beta) - 1
+  se_transformed <- exp(beta) * se
+  
+  lower_ci <- beta_transformed - (1.96 * se_transformed)
+  upper_ci <- beta_transformed + (1.96 * se_transformed)
+
+  # lower_ci <- beta_transformed - (1.645 * se_transformed)
+  # upper_ci <- beta_transformed + (1.645 * se_transformed)
+  
+  # Compute Z-score and p-value
+  z_stat <- beta / se
+  p_values <- 2 * (1 - pnorm(abs(z_stat)))  # Two-tailed test
+  
+  
+  results <- data.frame(
+    Estimate = beta_transformed,
+    Std_Error = se_transformed,
+    CI_Lower = lower_ci,
+    CI_Upper = upper_ci,
+    P_Value = p_values
+  )
+  
+  #add reference period
+  ref_index <- es_model$model_matrix_info[[1]]$ref_id
+  ref_date <- es_model$model_matrix_info[[1]]$ref
+  
+  ref_row <- data.frame(
+    Estimate = 0,
+    Std_Error = 0,
+    CI_Lower = 0,
+    CI_Upper = 0,
+    P_Value = 1
+  )
+  
+  #insert reference period into results
+  results <- results %>%
+    add_row(ref_row, .before = ref_index)
+  
+  results$date <- es_model$model_matrix_info[[1]]$items
+  
+  return(results)
+}
 
 
+
+plot_transformed_es <- function(es_model, title, filename){
+  
+  transformed = transform_qmle(es_model)
+  
+  p <- ggplot(transformed, aes(x = date, y = Estimate)) +
+    geom_vline(xintercept = as.Date('2020-04-05'), linetype = "dashed", color = "red", linewidth = 1) +  # Reference period line
+    geom_point(size = 3, color = "blue", position=position_dodge(width=1)) +  # Plot point estimates
+    geom_errorbar(aes(ymin = CI_Lower, ymax = CI_Upper), width = 2, color = "blue", position=position_dodge(width=1)) +  # Add CIs
+    geom_hline(yintercept = 0, linetype = "dashed", color = "black") +  # Zero effect line
+    labs(
+      title = title,
+      x = "Date",
+      y = "Estimate (ATE%)"
+      ) +
+    scale_x_date(labels = transformed$date, breaks = transformed$date, minor_breaks = transformed$date) +
+    # ylim(-0.6, 1) +
+    theme_bw(base_size = 14) +
+    theme(axis.text.x = element_text(angle = 90, vjust = .5, size = 13),
+          axis.text.y = element_text(size = 13),
+          legend.text = element_text(size = 16),
+          axis.title = element_text(size = 13),
+          plot.title = element_text(size = 20, hjust = 0.5))
+  
+  #save plot
+  filepath = paste('../output/event_study_plots/', filename, '.png', sep = '')
+  ggsave(filepath, p, width = 11, height = 8, dpi = 300)
+  
+  return(p)
+  
+}
 
 
