@@ -99,7 +99,9 @@ cumulative_spillover <- cumsum(spillover)
 
 spillover_total <- sum(spillover)
 
-spillover_percentage <- sum(spillover) / sum(counterfactual)
+spillover_percentage <- sum(spillover) / sum(predicted_treated)
+
+us_outflows_2020_total <- sum(us_flows_treated$volume_all)
 
 dates <- unique(outflows_filtered$time)
 
@@ -129,3 +131,4 @@ cumulative_spillover_plot <- counterfactual_df %>%
   geom_line()
 
 show(cumulative_spillover_plot)
+

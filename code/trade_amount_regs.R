@@ -25,7 +25,7 @@ announcement <- as.Date('2020-03-27')
 disbursement <- as.Date('2020-04-05')
 
 window_start <- as.Date('2020-01-01')
-window_end <- as.Date('2020-12-31')
+window_end <- as.Date('2020-06-07')
 
 treated_countries <- c('JP', 'KR', 'SG')
 
@@ -85,6 +85,67 @@ twfe_qmle <- amounts_joined %>%
 
 etable(twfe_qmle)
 
+twfe_levels <- list()
+
+counter <- 1
+
+#manually filter countries will all zeros to match qmle regs
+
+for (var in did_yvars){
+  twfe_levels[[counter]] <- amounts_joined %>%
+    filter(time >= window_start & time <= window_end,
+           income_group == 'H') %>%
+    group_by(user_cc) %>%
+    filter(any(.data[[var]] != 0)) %>%
+    ungroup() %>%
+    feols(.[var] ~ disbursed*us_outflow|user_cc + time, cluster = cluster_level_spillovers)
+  
+  counter = counter + 1
+  
+}
+
+#export as table
+
+model_names <- c("All Destinations", "Low-Income", "Middle-Income", "High-Income")
+
+
+names(twfe_levels) <- model_names
+
+#this is the standard star map, not sure why modelsummary uses a different one
+star_map = c('*' = .1, '**' = 0.05, '***' = 0.01)
+
+cmap_twfe <- c('(Intercept)' = '$(\\text{Intercept})$',
+               'us_outflow' = '$\\text{US}$',
+               'announced' = '$\\text{announced}$',
+               'disbursed' = '$\\text{disbursed}$',
+               'us_outflow:announced' = '$\\text{announced} \\times \\text{US}$',
+               'disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$'
+)
+
+gof_omitted <- "AIC|BIC|RMSE|Std.Errors|R2 Within|R2|R2 Adj."
+
+note_twfe <- "Standard errors clustered at the country level."
+
+gm_twfe <- tribble(~raw, ~clean, ~fmt,
+                   "nobs", "$\\text{Observations}$", "%.0f",
+                   "FE: user_cc", "Country FE", "%.4f",
+                   "FE: time", "Week FE", "%.4f")
+
+twfe_table <- modelsummary(twfe_levels,
+                           stars = star_map,
+                           coef_map = cmap_twfe,
+                           gof_map = gm_twfe,
+                           gof_omit = gof_omitted,
+                           title = "OLS–Dependent Variable: Average Transaction Size (USD)",
+                           escape = FALSE,
+                           output = 'latex') %>%
+  add_footnote(note_twfe, threeparttable = TRUE)
+
+show(twfe_table)
+
+kableExtra::save_kable(twfe_table, file = "../output/regression_tables/twfe_qmle_transaction_sizes_levels.tex")
+
+
 #Event Study
 
 
@@ -97,10 +158,21 @@ es_qmle_highincome <- transaction_amounts_all %>%
 
 iplot(es_qmle_highincome)
 
+es_levels <- amounts_joined %>%
+  filter(time >= window_start & time <= '2020-12-31',
+         income_group == 'H') %>%
+  feols(amounts_avg_all ~ i(time, us_outflow, ref = '2020-03-29')|time + user_cc, cluster = cluster_level_spillovers)
 
+iplot(es_levels)
 
+pretreatment_us <- transaction_amounts %>%
+  filter(user_cc == 'US',
+         time >= window_start & time <= disbursement)
 
-
+transaction_sizes_by_country <- transaction_amounts %>%
+  filter(amount_usd_avg != 0) %>%
+  group_by(user_cc) %>%
+  summarize(avg_trans_size = mean(amount_usd_avg))
 
 
 

@@ -88,7 +88,9 @@ balanceFlows <- function(data){
   origins <- unique(data$user_cc)
   destinations <- unique(data$user_cc2)
   
-  panel <- as_tibble(CJ(dates, origins, destinations)) %>% rename(time = dates, user_cc = origins, user_cc2 = destinations)
+  panel <- as_tibble(CJ(dates, origins, destinations)) %>%
+    rename(time = dates, user_cc = origins, user_cc2 = destinations) %>%
+    drop_na()
   
   # panel <- panel %>% mutate(country_number = as.numeric(factor(user_cc)),
   #                           time_number = as.numeric(factor(time)))

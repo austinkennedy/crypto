@@ -301,35 +301,6 @@ show(twfe_table)
 
 kableExtra::save_kable(twfe_table, file = "../output/regression_tables/twfe_qmle.tex")
 
-######FOREIGN-BORN TABLES
-
-names(twfe_qmle_q) <- c('Lowest Quartile', 'Second Quartile', 'Third Quartile', 'Highest Quartile')
-
-cmap_fb <- c('disbursed:us_outflow' = '$\\text{disbursed} \\times \\text{US}$')
-
-gof_fb <- tribble(~raw, ~clean, ~fmt,
-                     "nobs", "$\\text{Observations}$", "%.0f",
-                     "r.squared", "$R^{2}$", "%.2f",
-                     "adj.r.squared", "$R^{2} Adj.$", "%.2f",
-                     "FE: user_cc", "Country FE", "%.4f",
-                     "FE: time", "Week FE", "%.4f")
-
-note_fb <- 'Standard errors clustered at the country level. Columns refer to the outflows destined for countries depending on their level of foreign-born residents in the US, adjusted for their population, and split into quartiles.'
-
-fb_table <- modelsummary(twfe_qmle_q,
-                         stars = star_map,
-                         coef_map = cmap_fb,
-                         gof_omit = gof_omitted,
-                         gof_map = gof_fb,
-                         title = 'Poisson QMLE–Dependent Variable: Cryptocurrency Outflows',
-                         escape = FALSE,
-                         output = 'latex') %>%
-  add_footnote(note_fb, threeparttable = TRUE)
-
-show(fb_table)
-
-kableExtra::save_kable(fb_table, file = '../output/regression_tables/fb_table.tex')
-
 ####EVENT STUDY GRAPHS
 
 
@@ -441,6 +412,12 @@ price_regs <- outflows_joined %>%
   filter(time >= window_start & time <= window_end,
          income_group == 'H') %>%
   feglm(.[did_yvars]~disbursed*us_outflow + disbursed + log(price)|user_cc, cluster = cluster_level_spillovers, family = quasipoisson)
+
+
+price_regs <- outflows_joined %>%
+  filter(time >= window_start & time <= window_end,
+         income_group == 'H') %>%
+  feglm(.[did_yvars]~disbursed*us_outflow + disbursed + us_outflow + log(price), cluster = cluster_level_spillovers, family = quasipoisson)
 
 summary(price_regs)
 

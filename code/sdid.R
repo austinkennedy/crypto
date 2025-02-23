@@ -71,6 +71,11 @@ data_main <- prepare_data_synth(
 X_mat = data_main %>%
   select(user_cc, time, treated, BJ:ZA)
 
+baseline_mean <- data_main %>%
+  filter(user_cc == 'US' & treated == 0) %>%
+  summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
+  pull(pre_treatment_mean)
+
 # X_mat <- data_main[, c("user_cc", "time", "treated", BJ:ZA)]  # Replace BJ:ZA with actual column names if needed
 
 # Step 2: Create an empty list to store individual matrices
@@ -110,11 +115,24 @@ tau.hat = synthdid_estimate(Y,
                             )
 sprintf('point estimate: %1.2f', tau.hat)
 
-sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sprintf('Estimate relative to baseline mean: %1.5f', tau.hat/baseline_mean )
+
+dates <- as.Date(colnames(setup$W))
+dates_rescaled <- dates[seq(1,length(dates), 2)]
+
+sdid_main_plot <- synthdid_plot(tau.hat, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_main_plot)
 
-sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_overlaid_plot <- synthdid_plot(tau.hat, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_overlaid_plot)
 
@@ -133,8 +151,12 @@ baseline_outflows_us <- data_main %>%
   summarize(mean(outflow))
 
 se = sqrt(vcov(tau.hat, method='placebo'))
-sprintf('SE: (%1.2f)', se)
+sprintf('SE: (%1.5f)', se)
+sprintf('SE relative to baseline: %1.5f', se / baseline_mean)
 sprintf('95%% CI (%1.2f, %1.2f)', tau.hat - 1.96 * se, tau.hat + 1.96 * se)
+# Compute Z-score and p-value
+
+
 
 
 synthdid_units_plot(
@@ -151,12 +173,7 @@ synthdid_units_plot(
 
 ##################Modified function from synthdid package
 
-baseline_mean <- data_main %>%
-  filter(user_cc == 'US' & treated == 0) %>%
-  summarize(pre_treatment_mean = mean(outflow, na.rm = TRUE)) %>%
-  pull(pre_treatment_mean)
-
-time_effects <- get_time_effects(tau.hat, replications = 1000)
+time_effects <- get_time_effects(tau.hat, replications = 200)
 
 # Add confidence intervals to the data
 time_effects <- time_effects %>%
@@ -166,19 +183,24 @@ time_effects <- time_effects %>%
          lower_ci_relative = lower_ci/baseline_mean,
          upper_ci_relative = upper_ci/baseline_mean)
 
+dates <- as.Date(colnames(setup$W))
+dates_rescaled <- dates[seq(1,length(dates), 2)]
+
 # Plot the treatment effect with confidence intervals
 time_effects_graph <- ggplot(time_effects, aes(x = time, y = treatment_effect)) +
-  geom_line(aes(group=1),color = "blue", linewidth = 1) +  # Treatment effect line
-  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, group=1), alpha = 0.2, fill = "blue") +  # Confidence interval
-  geom_point(color = "blue", size = 2) +  # Points for treatment effects
-  geom_vline(xintercept = '2020-04-05', color = 'red', linewidth = 0.8) +
+  geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
+  geom_ribbon(aes(ymin = lower_ci, ymax = upper_ci, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
+  geom_point(color = "black", size = 2) +  # Points for treatment effects
+  geom_vline(xintercept = as.Date('2020-04-05'), color = 'black', linewidth = 0.8, linetype='longdash') +
+  scale_x_date(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
   labs(
-    title = "Treatment Effect Over Time with Confidence Intervals",
     x = "Time",
     y = "Treatment Effect"
   ) +
   theme_bw(base_size = 14) +
-  theme(axis.text.x = element_text(angle=45, vjust = 1, hjust = 1))
+  theme(axis.text.x = element_text(angle=90, vjust = 1, hjust = 1))
 
 show(time_effects_graph)
 
@@ -189,7 +211,10 @@ time_effects_relative_graph <- ggplot(time_effects, aes(x = time, y = treatment_
   geom_line(aes(group=1),color = "black", linewidth = 1) +  # Treatment effect line
   geom_ribbon(aes(ymin = lower_ci_relative, ymax = upper_ci_relative, group=1), alpha = 0.2, fill = "black") +  # Confidence interval
   geom_point(color = "black", size = 2) +  # Points for treatment effects
-  geom_vline(xintercept = '2020-04-05', color = 'black', linewidth = 0.8, linetype='longdash') +
+  geom_vline(xintercept = as.Date('2020-04-05'), color = 'black', linewidth = 0.8, linetype='longdash') +
+  scale_x_date(labels = dates_rescaled,
+               breaks = dates_rescaled,
+               minor_breaks = dates_rescaled) +
   labs(
     x = "Time",
     y = "Treatment Effect, Relative to Pre-Treatment Mean"
@@ -257,11 +282,24 @@ tau.hat_jan_2020_placebo = synthdid_estimate(
   )
 sprintf('point estimate: %1.2f', tau.hat_jan_2020_placebo)
 
-sdid_main_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+dates <- as.Date(colnames(setup_jan_2020_placebo$W))
+dates_rescaled <- dates[seq(1,length(dates), 2)]
+
+sdid_main_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") +
+  scale_alpha_continuous(range= c(0,1)) +
+  guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+               breaks = dates_rescaled,
+               minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_main_plot_jan_2020_placebo)
 
-sdid_overlaid_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_overlaid_plot_jan_2020_placebo <- synthdid_plot(tau.hat_jan_2020_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_overlaid_plot_jan_2020_placebo)
 
@@ -348,11 +386,26 @@ tau.hat_2018_placebo = synthdid_estimate(
 
 sprintf('point estimate: %1.2f', tau.hat_2018_placebo)
 
-sdid_main_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+dates <- as.Date(colnames(setup_2018_placebo$W))
+dates_rescaled <- dates[seq(1,length(dates), 2)]
+
+sdid_main_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 0, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") +
+  scale_alpha_continuous(range= c(0,1)) +
+  guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_main_plot_2018_placebo)
 
-sdid_overlaid_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") + scale_alpha_continuous(range= c(0,1)) + guides(alpha = FALSE)
+sdid_overlaid_plot_2018_placebo <- synthdid_plot(tau.hat_2018_placebo, overlay = 1, effect.alpha = 0, diagram.alpha = 0, treated.name = "US", control.name = "Synthetic Control") +
+  scale_alpha_continuous(range= c(0,1)) +
+  guides(alpha = FALSE) +
+  scale_x_continuous(labels = dates_rescaled,
+                     breaks = dates_rescaled,
+                     minor_breaks = dates_rescaled) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, size = 13))
 
 show(sdid_overlaid_plot_2018_placebo)
 

@@ -104,6 +104,9 @@ transaction_amounts <- trades_matched %>%
   summarise(amount_usd_avg = mean(amount_usd),
             amount_usd_median = median(amount_usd))
 
+
+transaction_amounts_balanced <- balanceFlows(transaction_amounts)
+
 #export data
 write.csv(flows_balanced, '../temporary/bilateral_flows_balanced.csv', row.names = FALSE)
 write.csv(flows_daily_balanced, '../temporary/bilateral_flows_balanced_daily.csv', row.names = FALSE)
@@ -114,7 +117,7 @@ write.csv(outflows, '../temporary/outflows_balanced.csv', row.names = FALSE)
 write.csv(outflows_sdid, '../temporary/data_sdid.csv', row.names = FALSE)
 write.csv(total_volume, '../temporary/total_volume_by_country.csv', row.names = FALSE)
 write.csv(volume_price, '../temporary/volume_price.csv', row.names = FALSE)
-write.csv(transaction_amounts, '../temporary/transaction_amounts_bilateral.csv', row.names = FALSE)
+write.csv(transaction_amounts_balanced, '../temporary/transaction_amounts_bilateral.csv', row.names = FALSE)
 
 ######Data playground
 
