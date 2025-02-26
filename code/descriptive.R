@@ -6,6 +6,7 @@ library(tidyverse)
 library(vroom)
 library(lubridate)
 library(gt)
+library(scales)
 source('functions.R')
 
 trades <- vroom('../temporary/trades_paxful_cleaned.csv')
@@ -22,6 +23,10 @@ matched_cross_border_trades <- matched_trades %>%
 ####US outflows graph
 
 stimulus_1 <- ymd('2020-04-12')
+
+stimulus_2 <- ymd('2021-01-03')
+
+stimulus_3 <- ymd('2021-03-07')
 
 stimulus_graph <- outflows %>%
   filter(user_cc == 'US',
@@ -44,6 +49,32 @@ stimulus_graph <- outflows %>%
 show(stimulus_graph)
 ggsave('../output/figures_paxful/stimulus_timing.png', plot = stimulus_graph, width = 9, height = 6, dpi = 300)
 
+stimulus_graph_extended <- outflows %>%
+  filter(user_cc == 'US',
+         time >= '2019-01-01',
+         time <= '2021-12-31') %>%
+  ggplot(., aes(x = time, y = outflow)) +
+  geom_line(color = 'blue', size = 0.8) +
+  geom_vline(xintercept = stimulus_1, color = 'red', linewidth = 0.8) +
+  geom_vline(xintercept = stimulus_2, color = 'red', linewidth = 0.8) +
+  geom_vline(xintercept = stimulus_3, color = 'red', linewidth = 0.8) +
+  annotate(x = stimulus_1, y = +Inf, label = "Round 1", vjust = 2, geom = "label") +
+  annotate(x = stimulus_2, y = +Inf, label = "Round 2", vjust = 4, geom = "label") +
+  annotate(x = stimulus_3, y = +Inf, label = "Round 3", vjust = 2, geom = "label") +
+  scale_x_date(breaks = "month", date_labels = '%b %Y') +
+  scale_y_continuous(breaks = c(400000, 600000, 800000, 1000000), labels = c('400,000', '600,000', '800,000', '1,000,000'))+
+  xlab('Date') +
+  ylab("USD") +
+  ggtitle("Outflows from US") +
+  theme_bw() +
+  theme(plot.title = element_text(size = 15, hjust = 0.5),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        plot.margin = unit(c(1,1,1,1), "cm"))
+
+show(stimulus_graph_extended)
+ggsave('../output/figures_paxful/stimulus_timing_extended.png', plot = stimulus_graph_extended, width = 9, height = 6, dpi = 300)
+
+
 ####Paxful volume w/ price
 volume_price <- getVolumePrice(trades, amount_usd, 'week')
 
@@ -55,7 +86,9 @@ paxful_volume_price <- volume_price %>%
   ylab("Volume (USD)") +
   theme_bw() +
   ggtitle("Paxful Volume (Weekly)")+
-  scale_x_date(limit = c(as.Date('2017-03-01'), as.Date('2022-09-01'))) +
+  scale_x_date(limit = c(as.Date('2017-03-01'), as.Date('2022-09-01')),
+               breaks = date_breaks("3 months"),
+               labels = date_format(format= "%b %Y")) +
   scale_y_continuous(breaks = c(40000000, 80000000), labels = c("$40M", "$80M"),
                      sec.axis = sec_axis(trans = ~./1200, name = "USD/Bitcoin")) +
   scale_color_manual(name = "Legend", values = c(
@@ -66,7 +99,8 @@ paxful_volume_price <- volume_price %>%
     'Volume' = 1,
     'Bitcoin Price' = 2
   )) +
-  theme(plot.title = element_text(size = 15, hjust = 0.5),
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        plot.title = element_text(size = 15, hjust = 0.5),
         legend.position = c(0.15,0.85),
         legend.background = element_rect(fill = "white",
                                          size = 0.3,
@@ -165,7 +199,7 @@ total_outflows <- flows %>%
   summarize(total = sum(volume)) %>%
   ungroup() %>%
   mutate(share = total/sum(total)) %>%
-  left_join(country_data[, c("alpha.2", "label")], by = c("user_cc" = "alpha.2")) %>%
+  left_join(country_data[, c("alpha.2", "label", "income_group")], by = c("user_cc" = "alpha.2")) %>%
   rename(code = user_cc)
 
 total_domestic <- flows %>%
@@ -224,6 +258,57 @@ outflows_graph <- total_outflows %>%
   ylab("Share of Global Outflows")
 
 show(outflows_graph)
+
+#show outflows for US and other high income countries
+
+top_senders_high_income <- total_outflows %>%
+  filter(income_group == 'H') %>%
+  slice_max(total, n = 5) %>%
+  pull(code)
+
+#construct flows to middle and low income countries
+treated_countries <- c('JP', 'KR', 'SG')
+
+
+flows_joined <- flows %>%
+  filter(!user_cc %in% treated_countries,
+         user_cc != user_cc2) %>%
+  left_join(country_data, by = c('user_cc2' = 'alpha.2'))
+
+outflows_lm <- flows_joined %>%
+  filter(income_group %in% c('L', 'LM', 'UM')) %>%
+  group_by(user_cc, time) %>%
+  summarize(volume = sum(volume)) %>%
+  left_join(country_data, by = c('user_cc' = 'alpha.2'))
+
+top_senders_high_income <- outflows_lm %>%
+  filter(income_group == 'H',
+         time >= '2019-01-01' & time <= '2020-12-31') %>%
+  group_by(user_cc) %>%
+  summarize(total = sum(volume)) %>%
+  slice_max(total, n = 6) %>%
+  pull(user_cc)
+  
+  
+outflows_lm_high_income_graph <- outflows_lm %>%
+  filter(user_cc %in% top_senders_high_income,
+         time >= '2019-01-01' & time <= '2020-12-31') %>%
+  ggplot(., aes(x=time, y = volume, color = label, linetype=label)) +
+  scale_y_log10(breaks = c(10000, 100000, 1000000), labels = c('10,000', '100,000', '1,000,000')) +
+  geom_line() +
+  scale_x_date(breaks='month', date_labels = '%b %Y') +
+  xlab('Date') + 
+  ylab('USD') +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        plot.margin = unit(c(1,1,1,1), "cm"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank())
+
+show(outflows_lm_high_income_graph)
+
+ggsave('../output/figures_paxful/outflows_us_vs_high_income.png', plot = outflows_lm_high_income_graph, width = 10, height = 6, dpi = 300)
+
 
 
 #total flows, broken up by inflows/outflows
